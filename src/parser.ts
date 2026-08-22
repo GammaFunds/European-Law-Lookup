@@ -1,4 +1,10 @@
 import type { LawJurisdiction, LawReference } from "./law/types";
+import {
+  EU_ACT_ALIASES,
+  euActForCelex,
+  euActForLawCode,
+  parseEuCelex,
+} from "./law/euActRegistry";
 
 export type ParsedLawReference = LawReference;
 
@@ -154,7 +160,9 @@ const swissFedlexLawCodes = [
 ];
 
 const swissFedlexLawCodeSet = new Set(swissFedlexLawCodes);
-const euLawCodeSet = new Set(["DSGVO", "GDPR", "RGPD", "RODO"]);
+const euLawCodePattern = EU_ACT_ALIASES
+  .map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
 
 export function enrichJurisdiction(
   reference: ParsedLawReference,
@@ -171,8 +179,9 @@ export function enrichJurisdiction(
   ) {
     return { ...reference, jurisdiction: "CH" };
   }
-  if (selectedJurisdiction === "EU" && !reference.jurisdiction && reference.referenceType === "article" && euLawCodeSet.has(reference.lawCode)) {
-    return { ...reference, lawCode: "DSGVO", jurisdiction: "EU" };
+  if (selectedJurisdiction === "EU" && !reference.jurisdiction && reference.referenceType === "article") {
+    const act = euActForLawCode(reference.lawCode);
+    if (act) return { ...reference, lawCode: act.canonicalLawCode, jurisdiction: "EU" };
   }
   return reference;
 }
@@ -183,10 +192,14 @@ export function parseLawReferenceWithSelectedJurisdiction(
 ): ParsedLawReference | null {
   if (selectedJurisdiction === "EU") {
     const normalized = input.trim().replace(/\s+/g, " ");
-    const euCodes = Array.from(euLawCodeSet).join("|");
-    const euArticle = new RegExp(`^(?:(${euCodes})\\s+${articleMarkerPattern}\\s*(${sectionPattern})|${articleMarkerPattern}\\s*(${sectionPattern})\\s+(${euCodes}))$`, "iu").exec(normalized);
+    const euCelexArticle = parseEuCelexArticle(normalized);
+    if (euCelexArticle) return euCelexArticle;
+    const euArticle = new RegExp(`^(?:(${euLawCodePattern})\\s+${articleMarkerPattern}\\s*(${sectionPattern})|${articleMarkerPattern}\\s*(${sectionPattern})\\s+(${euLawCodePattern}))$`, "iu").exec(normalized);
     if (euArticle) {
-      return { lawCode: "DSGVO", section: euArticle[2] ?? euArticle[3], referenceType: "article", jurisdiction: "EU" };
+      const act = euActForLawCode(euArticle[1] ?? euArticle[4]);
+      if (act) {
+        return { lawCode: act.canonicalLawCode, section: euArticle[2] ?? euArticle[3], referenceType: "article", jurisdiction: "EU" };
+      }
     }
   }
   const parsedReference = parseLawReference(input);
@@ -194,7 +207,7 @@ export function parseLawReferenceWithSelectedJurisdiction(
     if (
       selectedJurisdiction !== "EU" &&
       !parsedReference.jurisdiction &&
-      euLawCodeSet.has(parsedReference.lawCode)
+      euActForLawCode(parsedReference.lawCode) !== null
     ) {
       return null;
     }
@@ -257,12 +270,32 @@ export function parseLawReferenceWithSelectedJurisdiction(
   return null;
 }
 
+function parseEuCelexArticle(input: string): ParsedLawReference | null {
+  const celexPattern = String.raw`(?:CELEX\s*[:]?\s*)?(3\d{4}[RLD]\d{4})`;
+  const celexFirst = new RegExp(`^${celexPattern}\\s+${articleMarkerPattern}\\s*(${sectionPattern})$`, "iu").exec(input);
+  const articleFirst = new RegExp(`^${articleMarkerPattern}\\s*(${sectionPattern})\\s+${celexPattern}$`, "iu").exec(input);
+  const match = celexFirst ?? articleFirst;
+  if (!match) return null;
+
+  const celex = celexFirst ? match[1] : match[2];
+  const section = celexFirst ? match[2] : match[1];
+  if (!parseEuCelex(celex)) return null;
+  const act = euActForCelex(celex);
+  if (!act) return null;
+
+  return {
+    lawCode: act.canonicalLawCode,
+    section,
+    referenceType: "article",
+    jurisdiction: "EU",
+  };
+}
+
 function isStandaloneEuAliasReference(input: string): boolean {
   const normalized = input.trim().replace(/\s+/g, " ");
   if (!normalized) return false;
 
-  const euCodes = Array.from(euLawCodeSet).join("|");
-  return new RegExp(`^(?:(${euCodes})\\s+${articleMarkerPattern}\\s*(${sectionPattern})|${articleMarkerPattern}\\s*(${sectionPattern})\\s+(${euCodes})|(${euCodes})\\s+(?:§\\s*)?(${sectionPattern})|(?:§\\s*)?(${sectionPattern})\\s+(${euCodes}))$`, "iu").test(normalized);
+  return new RegExp(`^(?:(${euLawCodePattern})\\s+${articleMarkerPattern}\\s*(${sectionPattern})|${articleMarkerPattern}\\s*(${sectionPattern})\\s+(${euLawCodePattern})|(${euLawCodePattern})\\s+(?:§\\s*)?(${sectionPattern})|(?:§\\s*)?(${sectionPattern})\\s+(${euLawCodePattern}))$`, "iu").test(normalized);
 }
 
 export function parseLawReference(input: string): ParsedLawReference | null {

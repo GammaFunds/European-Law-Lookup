@@ -41,6 +41,21 @@ describe("EurLexLawProvider", () => {
     });
   });
 
+  it("resolves registered EU aliases through the generic act mapping", () => {
+    assert.deepEqual(buildEurLexFetchRequest({ ...reference, lawCode: "GDPR" }), {
+      url: EUR_LEX_DSGVO_CELLAR_URL,
+      headers: {
+        Accept: "application/xhtml+xml",
+        "Accept-Language": "deu",
+        "Accept-Max-Cs-Size": "8388608",
+      },
+    });
+    assert.equal(
+      buildEurLexSectionUrl({ ...reference, lawCode: "GDPR" }),
+      "https://eur-lex.europa.eu/eli/reg/2016/679/oj/deu/html",
+    );
+  });
+
   it("builds language-specific official ELI URLs and Cellar headers", () => {
     for (const language of EU_LANGUAGES) {
       const nextReference = { ...reference, language: language.code };

@@ -55,6 +55,30 @@ describe("jurisdiction enrichment", () => {
       },
     );
   });
+
+  it("parses registered CELEX article references only for EU", () => {
+    for (const input of [
+      "32016R0679 Art. 6",
+      "CELEX:32016R0679 Art. 6",
+      "Art. 6 CELEX 32016R0679",
+    ]) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+        lawCode: "DSGVO",
+        section: "6",
+        referenceType: "article",
+        jurisdiction: "EU",
+      });
+    }
+
+    assert.equal(
+      parseLawReferenceWithSelectedJurisdiction("32024R1689 Art. 1", "EU"),
+      null,
+    );
+    assert.equal(
+      parseLawReferenceWithSelectedJurisdiction("32016R0679 Art. 6", "DE"),
+      null,
+    );
+  });
   it("keeps Deutschland selection DE/default-compatible for bare StGB", () => {
     assert.deepEqual(
       parseLawReferenceWithSelectedJurisdiction("StGB § 75", "DE"),

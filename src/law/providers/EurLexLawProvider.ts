@@ -2,12 +2,11 @@ import type { LawProvider } from "../LawProvider";
 import { LawProviderUnavailableError } from "../errors";
 import type { LawProviderHttpTransport } from "../httpTransport";
 import type { LawReference, LawSection } from "../types";
+import { euActForLawCode } from "../euActRegistry";
 import {
   buildEurLexFetchRequest,
   buildEurLexSectionUrl,
 } from "./eurLexMapping";
-
-const FALLBACK_TITLE = "Regulation (EU) 2016/679";
 
 export class EurLexLawProvider implements LawProvider {
   readonly id = "eur-lex";
@@ -19,6 +18,8 @@ export class EurLexLawProvider implements LawProvider {
     const sourceUrl = buildEurLexSectionUrl(reference);
     const fetchRequest = buildEurLexFetchRequest(reference);
     if (!sourceUrl || !fetchRequest) return null;
+    const act = euActForLawCode(reference.lawCode);
+    if (!act) return null;
 
     let response;
     try {
@@ -58,8 +59,8 @@ export class EurLexLawProvider implements LawProvider {
       providerId: this.id,
       providerLabel: this.label,
       sourceUrl,
-      lawCode: "DSGVO",
-      lawTitle: textOf(firstElementByClass(html, "oj-doc-ti")) || FALLBACK_TITLE,
+      lawCode: act.canonicalLawCode,
+      lawTitle: textOf(firstElementByClass(html, "oj-doc-ti")) || act.officialTitle,
       section: reference.section,
       referenceType: "article",
       jurisdiction: "EU",

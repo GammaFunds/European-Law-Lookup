@@ -1,0 +1,93 @@
+import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { describe, it } from "node:test";
+import {
+  EU_ACT_ALIASES,
+  euActForCelex,
+  euActForLawCode,
+  normalizeEuLawCode,
+  parseEuCelex,
+} from "../src/law/euActRegistry";
+
+describe("euActRegistry", () => {
+  it("owns EU alias recognition instead of duplicating it in the parser", () => {
+    const parserSource = readFileSync("src/parser.ts", "utf8");
+    assert.doesNotMatch(parserSource, /new Set\(\["DSGVO", "GDPR", "RGPD", "RODO"\]\)/);
+  });
+
+  it("binds DSGVO, GDPR, RGPD, and RODO aliases to CELEX 32016R0679", () => {
+    for (const alias of ["DSGVO", "GDPR", "RGPD", "RODO"]) {
+      const entry = euActForLawCode(alias);
+      assert.equal(entry?.celex, "32016R0679");
+      assert.equal(entry?.canonicalLawCode, "DSGVO");
+      assert.equal(entry?.documentType, "R");
+      assert.equal(entry?.officialTitle, "Regulation (EU) 2016/679");
+    }
+  });
+
+  it("normalizes EU aliases case-insensitively to the canonical law code", () => {
+    assert.equal(normalizeEuLawCode("gdpr"), "DSGVO");
+    assert.equal(normalizeEuLawCode(" RGPD "), "DSGVO");
+    assert.equal(normalizeEuLawCode("DSGVO"), "DSGVO");
+    assert.equal(normalizeEuLawCode("BGB"), null);
+  });
+
+  it("exposes the supported EU alias set", () => {
+    assert.deepEqual([...EU_ACT_ALIASES].sort(), ["DSGVO", "GDPR", "RGPD", "RODO"].sort());
+  });
+
+  it("rejects the AI Act CELEX and every unregistered CELEX", () => {
+    assert.equal(euActForCelex("32024R1689"), null);
+    assert.equal(euActForCelex("32019L0790"), null);
+    assert.equal(euActForCelex("32016R0679")?.canonicalLawCode, "DSGVO");
+  });
+});
+
+describe("parseEuCelex", () => {
+  it("parses a valid sector-3 regulation", () => {
+    assert.deepEqual(parseEuCelex("32016R0679"), {
+      sector: "3",
+      year: "2016",
+      documentType: "R",
+      number: "0679",
+    });
+  });
+
+  it("parses valid sector-3 directive and decision shapes", () => {
+    assert.equal(parseEuCelex("32019L0790")?.documentType, "L");
+    assert.equal(parseEuCelex("32019D0797")?.documentType, "D");
+    assert.equal(parseEuCelex("32019L0790")?.year, "2019");
+    assert.equal(parseEuCelex("32019D0797")?.number, "0797");
+  });
+
+  it("fails closed for non-sector-3 CELEX", () => {
+    assert.equal(parseEuCelex("02016R0679"), null);
+    assert.equal(parseEuCelex("12016R0679"), null);
+    assert.equal(parseEuCelex("22016R0679"), null);
+    assert.equal(parseEuCelex("42016R0679"), null);
+    assert.equal(parseEuCelex("62016R0679"), null);
+  });
+
+  it("fails closed for unsupported document types", () => {
+    assert.equal(parseEuCelex("32016C0679"), null);
+    assert.equal(parseEuCelex("32016A0679"), null);
+    assert.equal(parseEuCelex("32016M0679"), null);
+  });
+
+  it("fails closed for malformed CELEX shapes", () => {
+    for (const value of [
+      "32016R679",
+      "32016R06790",
+      "32016r0679",
+      "32016 R 0679",
+      "32016R067X",
+      "32016X0679",
+      "32016R0000",
+      "31001R0001",
+      "32100R0001",
+      "",
+    ]) {
+      assert.equal(parseEuCelex(value), null, value);
+    }
+  });
+});
