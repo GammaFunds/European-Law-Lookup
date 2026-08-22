@@ -7,6 +7,7 @@ import {
   buildEurLexSectionUrl,
   EUR_LEX_DSGVO_CELLAR_URL,
   EUR_LEX_AIACT_CELLAR_URL,
+  EUR_LEX_DATA_ACT_CELLAR_URL,
 } from "../src/law/providers/eurLexMapping";
 import { EurLexLawProvider } from "../src/law/providers/EurLexLawProvider";
 
@@ -73,6 +74,30 @@ describe("EurLexLawProvider", () => {
     );
     assert.deepEqual(buildEurLexFetchRequest({ ...reference, lawCode: "AI-ACT" }), {
       url: EUR_LEX_AIACT_CELLAR_URL,
+      headers: {
+        Accept: "application/xhtml+xml",
+        "Accept-Language": "deu",
+        "Accept-Max-Cs-Size": "8388608",
+      },
+    });
+  });
+
+  it("resolves Data Act aliases through the generic act mapping", () => {
+    const dataActRef = { ...reference, lawCode: "DATA_ACT" };
+    assert.deepEqual(buildEurLexFetchRequest(dataActRef), {
+      url: EUR_LEX_DATA_ACT_CELLAR_URL,
+      headers: {
+        Accept: "application/xhtml+xml",
+        "Accept-Language": "deu",
+        "Accept-Max-Cs-Size": "8388608",
+      },
+    });
+    assert.equal(
+      buildEurLexSectionUrl(dataActRef),
+      "https://eur-lex.europa.eu/eli/reg/2023/2854/oj/deu/html",
+    );
+    assert.deepEqual(buildEurLexFetchRequest({ ...reference, lawCode: "DATA ACT" }), {
+      url: EUR_LEX_DATA_ACT_CELLAR_URL,
       headers: {
         Accept: "application/xhtml+xml",
         "Accept-Language": "deu",

@@ -35,6 +35,16 @@ describe("euActRegistry", () => {
     }
   });
 
+  it("binds Data Act aliases to CELEX 32023R2854", () => {
+    for (const alias of ["DATA_ACT", "DATA ACT"]) {
+      const entry = euActForLawCode(alias);
+      assert.equal(entry?.celex, "32023R2854");
+      assert.equal(entry?.canonicalLawCode, "DATA_ACT");
+      assert.equal(entry?.documentType, "R");
+      assert.equal(entry?.officialTitle, "Regulation (EU) 2023/2854");
+    }
+  });
+
   it("normalizes EU aliases case-insensitively to the canonical law code", () => {
     assert.equal(normalizeEuLawCode("gdpr"), "DSGVO");
     assert.equal(normalizeEuLawCode(" RGPD "), "DSGVO");
@@ -43,12 +53,15 @@ describe("euActRegistry", () => {
     assert.equal(normalizeEuLawCode("aiact"), "AIACT");
     assert.equal(normalizeEuLawCode(" AI-ACT "), "AIACT");
     assert.equal(normalizeEuLawCode("EU AI ACT"), "AIACT");
+    assert.equal(normalizeEuLawCode("data_act"), "DATA_ACT");
+    assert.equal(normalizeEuLawCode(" Data Act "), "DATA_ACT");
   });
 
   it("exposes the supported EU alias set", () => {
     assert.deepEqual([...EU_ACT_ALIASES].sort(), [
       "AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO",
       "DSGVO", "GDPR", "RGPD", "RODO",
+      "DATA_ACT", "DATA ACT",
     ].sort());
   });
 
@@ -56,6 +69,8 @@ describe("euActRegistry", () => {
     assert.equal(euActForCelex("32024R1689")?.canonicalLawCode, "AIACT");
     assert.equal(euActForCelex("32019L0790"), null);
     assert.equal(euActForCelex("32016R0679")?.canonicalLawCode, "DSGVO");
+    assert.equal(euActForCelex("32023R2854")?.canonicalLawCode, "DATA_ACT");
+    assert.equal(euActForCelex("32023R2855"), null);
   });
 });
 

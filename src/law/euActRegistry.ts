@@ -32,6 +32,13 @@ const EU_ACTS: readonly EuActEntry[] = [
     aliases: ["AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO"],
     officialTitle: "Regulation (EU) 2024/1689",
   },
+  {
+    celex: "32023R2854",
+    documentType: "R",
+    canonicalLawCode: "DATA_ACT",
+    aliases: ["DATA_ACT", "DATA ACT"],
+    officialTitle: "Regulation (EU) 2023/2854",
+  },
 ];
 
 const euActsByLawCode = new Map<string, EuActEntry>();

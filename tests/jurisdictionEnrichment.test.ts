@@ -88,6 +88,32 @@ describe("jurisdiction enrichment", () => {
     }
   });
 
+  it("isolates Data Act aliases to the selected EU jurisdiction", () => {
+    const acceptedForms = [
+      "DATA_ACT Art. 1",
+      "Art. 1 DATA_ACT",
+      "DATA ACT Art. 1",
+      "Art. 1 DATA ACT",
+      "Data Act Art. 1",
+      "Art. 1 Data Act",
+    ];
+
+    for (const input of acceptedForms) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+        lawCode: "DATA_ACT",
+        section: "1",
+        referenceType: "article",
+        jurisdiction: "EU",
+      });
+    }
+
+    for (const jurisdiction of ["DE", "AT", "CH"] as const) {
+      for (const input of acceptedForms) {
+        assert.equal(parseLawReferenceWithSelectedJurisdiction(input, jurisdiction), null);
+      }
+    }
+  });
+
   it("parses registered CELEX article references only for EU", () => {
     for (const input of [
       "32016R0679 Art. 6",
@@ -106,6 +132,15 @@ describe("jurisdiction enrichment", () => {
       parseLawReferenceWithSelectedJurisdiction("32024R1689 Art. 1", "EU"),
       {
         lawCode: "AIACT",
+        section: "1",
+        referenceType: "article",
+        jurisdiction: "EU",
+      },
+    );
+    assert.deepEqual(
+      parseLawReferenceWithSelectedJurisdiction("32023R2854 Art. 1", "EU"),
+      {
+        lawCode: "DATA_ACT",
         section: "1",
         referenceType: "article",
         jurisdiction: "EU",
