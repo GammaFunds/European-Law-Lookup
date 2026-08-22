@@ -80,6 +80,18 @@ describe("EurLexLawProvider", () => {
         "Accept-Max-Cs-Size": "8388608",
       },
     });
+    assert.equal(
+      buildEurLexSectionUrl({ ...reference, lawCode: "AIA" }),
+      "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/deu/html",
+    );
+    assert.deepEqual(buildEurLexFetchRequest({ ...reference, lawCode: "KI-VO" }), {
+      url: EUR_LEX_AIACT_CELLAR_URL,
+      headers: {
+        Accept: "application/xhtml+xml",
+        "Accept-Language": "deu",
+        "Accept-Max-Cs-Size": "8388608",
+      },
+    });
   });
 
   it("resolves Data Act aliases through the generic act mapping", () => {

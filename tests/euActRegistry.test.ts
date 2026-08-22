@@ -26,7 +26,7 @@ describe("euActRegistry", () => {
   });
 
   it("binds AI Act aliases to CELEX 32024R1689", () => {
-    for (const alias of ["AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO"]) {
+    for (const alias of ["AIACT", "AI_ACT", "AIA", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "KI-VO", "AI-VO"]) {
       const entry = euActForLawCode(alias);
       assert.equal(entry?.celex, "32024R1689");
       assert.equal(entry?.canonicalLawCode, "AIACT");
@@ -53,13 +53,16 @@ describe("euActRegistry", () => {
     assert.equal(normalizeEuLawCode("aiact"), "AIACT");
     assert.equal(normalizeEuLawCode(" AI-ACT "), "AIACT");
     assert.equal(normalizeEuLawCode("EU AI ACT"), "AIACT");
+    assert.equal(normalizeEuLawCode("ai_act"), "AIACT");
+    assert.equal(normalizeEuLawCode("aia"), "AIACT");
+    assert.equal(normalizeEuLawCode("KI-VO"), "AIACT");
     assert.equal(normalizeEuLawCode("data_act"), "DATA_ACT");
     assert.equal(normalizeEuLawCode(" Data Act "), "DATA_ACT");
   });
 
   it("exposes the supported EU alias set", () => {
     assert.deepEqual([...EU_ACT_ALIASES].sort(), [
-      "AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO",
+      "AIACT", "AI_ACT", "AIA", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "KI-VO", "AI-VO",
       "DSGVO", "GDPR", "RGPD", "RODO",
       "DATA_ACT", "DATA ACT",
     ].sort());

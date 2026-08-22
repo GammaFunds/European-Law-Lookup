@@ -60,6 +60,10 @@ describe("jurisdiction enrichment", () => {
     const acceptedForms = [
       "AIACT Art. 1",
       "Art. 1 AIACT",
+      "AI_ACT Art. 1",
+      "Art. 1 AI_ACT",
+      "AIA Art. 1",
+      "Art. 1 AIA",
       "AI-ACT Art. 1",
       "Art. 1 AI-ACT",
       "AI ACT Art. 1",
@@ -68,6 +72,8 @@ describe("jurisdiction enrichment", () => {
       "Art. 1 EU AI ACT",
       "AI-GESETZ Art. 1",
       "Art. 1 AI-GESETZ",
+      "KI-VO Art. 1",
+      "Art. 1 KI-VO",
       "AI-VO Art. 1",
       "Art. 1 AI-VO",
     ];

@@ -8,7 +8,7 @@ export const EUR_LEX_DSGVO_ALIASES = ["DSGVO", "GDPR", "RGPD", "RODO"] as const;
 
 export const EUR_LEX_AIACT_CELEX = "32024R1689";
 export const EUR_LEX_AIACT_ELI_PATH = "reg/2024/1689/oj";
-export const EUR_LEX_AIACT_ALIASES = ["AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO"] as const;
+export const EUR_LEX_AIACT_ALIASES = ["AIACT", "AI_ACT", "AIA", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "KI-VO", "AI-VO"] as const;
 
 export const EUR_LEX_DATA_ACT_CELEX = "32023R2854";
 export const EUR_LEX_DATA_ACT_ELI_PATH = "reg/2023/2854/oj";
