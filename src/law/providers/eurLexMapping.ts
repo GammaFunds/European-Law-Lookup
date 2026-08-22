@@ -6,7 +6,12 @@ export const EUR_LEX_DSGVO_CELEX = "32016R0679";
 export const EUR_LEX_DSGVO_ELI_PATH = "reg/2016/679/oj";
 export const EUR_LEX_DSGVO_ALIASES = ["DSGVO", "GDPR", "RGPD", "RODO"] as const;
 
+export const EUR_LEX_AIACT_CELEX = "32024R1689";
+export const EUR_LEX_AIACT_ELI_PATH = "reg/2024/1689/oj";
+export const EUR_LEX_AIACT_ALIASES = ["AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO"] as const;
+
 export const EUR_LEX_DSGVO_CELLAR_URL = `https://publications.europa.eu/resource/celex/${EUR_LEX_DSGVO_CELEX}`;
+export const EUR_LEX_AIACT_CELLAR_URL = `https://publications.europa.eu/resource/celex/${EUR_LEX_AIACT_CELEX}`;
 
 export function buildEurLexFetchRequest(reference: LawReference): {
   url: string;

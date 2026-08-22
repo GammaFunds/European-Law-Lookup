@@ -56,6 +56,38 @@ describe("jurisdiction enrichment", () => {
     );
   });
 
+  it("isolates AI Act aliases to the selected EU jurisdiction", () => {
+    const acceptedForms = [
+      "AIACT Art. 1",
+      "Art. 1 AIACT",
+      "AI-ACT Art. 1",
+      "Art. 1 AI-ACT",
+      "AI ACT Art. 1",
+      "Art. 1 AI ACT",
+      "EU AI ACT Art. 1",
+      "Art. 1 EU AI ACT",
+      "AI-GESETZ Art. 1",
+      "Art. 1 AI-GESETZ",
+      "AI-VO Art. 1",
+      "Art. 1 AI-VO",
+    ];
+
+    for (const input of acceptedForms) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+        lawCode: "AIACT",
+        section: "1",
+        referenceType: "article",
+        jurisdiction: "EU",
+      });
+    }
+
+    for (const jurisdiction of ["DE", "AT", "CH"] as const) {
+      for (const input of acceptedForms) {
+        assert.equal(parseLawReferenceWithSelectedJurisdiction(input, jurisdiction), null);
+      }
+    }
+  });
+
   it("parses registered CELEX article references only for EU", () => {
     for (const input of [
       "32016R0679 Art. 6",
@@ -70,9 +102,14 @@ describe("jurisdiction enrichment", () => {
       });
     }
 
-    assert.equal(
+    assert.deepEqual(
       parseLawReferenceWithSelectedJurisdiction("32024R1689 Art. 1", "EU"),
-      null,
+      {
+        lawCode: "AIACT",
+        section: "1",
+        referenceType: "article",
+        jurisdiction: "EU",
+      },
     );
     assert.equal(
       parseLawReferenceWithSelectedJurisdiction("32016R0679 Art. 6", "DE"),

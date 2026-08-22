@@ -25,6 +25,13 @@ const EU_ACTS: readonly EuActEntry[] = [
     aliases: ["DSGVO", "GDPR", "RGPD", "RODO"],
     officialTitle: "Regulation (EU) 2016/679",
   },
+  {
+    celex: "32024R1689",
+    documentType: "R",
+    canonicalLawCode: "AIACT",
+    aliases: ["AIACT", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "AI-VO"],
+    officialTitle: "Regulation (EU) 2024/1689",
+  },
 ];
 
 const euActsByLawCode = new Map<string, EuActEntry>();
