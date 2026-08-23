@@ -1,7 +1,7 @@
 import type { LawJurisdiction, LawReference } from "./law/types";
 import {
   EU_ACT_ALIASES,
-  euActForCelex,
+  euActForCelexReference,
   euActForLawCode,
   parseEuCelex,
 } from "./law/euActRegistry";
@@ -280,7 +280,7 @@ function parseEuCelexArticle(input: string): ParsedLawReference | null {
   const celex = celexFirst ? match[1] : match[2];
   const section = celexFirst ? match[2] : match[1];
   if (!parseEuCelex(celex)) return null;
-  const act = euActForCelex(celex);
+  const act = euActForCelexReference(celex);
   if (!act) return null;
 
   return {

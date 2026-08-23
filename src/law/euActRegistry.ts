@@ -63,6 +63,23 @@ export function euActForCelex(celex: string): EuActEntry | null {
   return euActsByCelex.get(celex) ?? null;
 }
 
+export function euActForCelexReference(celex: string): EuActEntry | null {
+  const normalizedCelex = celex.trim().toUpperCase();
+  const curatedEntry = euActForCelex(normalizedCelex);
+  if (curatedEntry) return curatedEntry;
+
+  const parsed = parseEuCelex(normalizedCelex);
+  if (!parsed) return null;
+
+  return {
+    celex: normalizedCelex,
+    canonicalLawCode: normalizedCelex,
+    documentType: parsed.documentType,
+    aliases: [],
+    officialTitle: normalizedCelex,
+  };
+}
+
 export function normalizeEuLawCode(lawCode: string): string | null {
   return euActForLawCode(lawCode)?.canonicalLawCode ?? null;
 }

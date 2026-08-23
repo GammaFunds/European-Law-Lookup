@@ -58,6 +58,15 @@ describe("EurLexLawProvider", () => {
     );
   });
 
+  it("maps an unregistered CELEX directly to Cellar and its generic ELI URL", () => {
+    const genericReference = { ...reference, lawCode: "32022R2065" };
+    assert.equal(buildEurLexFetchRequest(genericReference)?.url, "https://publications.europa.eu/resource/celex/32022R2065");
+    assert.equal(
+      buildEurLexSectionUrl(genericReference),
+      "https://eur-lex.europa.eu/eli/reg/2022/2065/oj/deu/html",
+    );
+  });
+
   it("resolves AI Act aliases through the generic act mapping", () => {
     const aiActRef = { ...reference, lawCode: "AIACT" };
     assert.deepEqual(buildEurLexFetchRequest(aiActRef), {
@@ -221,6 +230,14 @@ describe("EurLexLawProvider", () => {
     assert.match(section!.text, /Ein verschachtelter Absatz/);
     assert.match(section!.text, /Eintrag eins\nEintrag zwei/);
     assert.doesNotMatch(section!.text, /Artikel 6|Rechtmäßigkeit|Artikel 7|bad|<script|<style/);
+  });
+
+  it("keeps a generic CELEX as the returned law code", async () => {
+    const section = await new EurLexLawProvider(transport(200, html)).getSection({
+      ...reference,
+      lawCode: "32022L2555",
+    });
+    assert.equal(section?.lawCode, "32022L2555");
   });
 
   it("supports a final article and rejects every non-200 response class", async () => {

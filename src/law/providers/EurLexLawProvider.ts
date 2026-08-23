@@ -2,7 +2,7 @@ import type { LawProvider } from "../LawProvider";
 import { LawProviderUnavailableError } from "../errors";
 import type { LawProviderHttpTransport } from "../httpTransport";
 import type { LawReference, LawSection } from "../types";
-import { euActForLawCode } from "../euActRegistry";
+import { euActForCelexReference, euActForLawCode } from "../euActRegistry";
 import {
   buildEurLexFetchRequest,
   buildEurLexSectionUrl,
@@ -18,7 +18,7 @@ export class EurLexLawProvider implements LawProvider {
     const sourceUrl = buildEurLexSectionUrl(reference);
     const fetchRequest = buildEurLexFetchRequest(reference);
     if (!sourceUrl || !fetchRequest) return null;
-    const act = euActForLawCode(reference.lawCode);
+    const act = euActForLawCode(reference.lawCode) ?? euActForCelexReference(reference.lawCode);
     if (!act) return null;
 
     let response;

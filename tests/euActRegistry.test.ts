@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   EU_ACT_ALIASES,
   euActForCelex,
+  euActForCelexReference,
   euActForLawCode,
   normalizeEuLawCode,
   parseEuCelex,
@@ -74,6 +75,24 @@ describe("euActRegistry", () => {
     assert.equal(euActForCelex("32016R0679")?.canonicalLawCode, "DSGVO");
     assert.equal(euActForCelex("32023R2854")?.canonicalLawCode, "DATA_ACT");
     assert.equal(euActForCelex("32023R2855"), null);
+  });
+
+  it("creates exact synthetic entries for valid unregistered sector-3 acts", () => {
+    for (const [celex, documentType] of [["32022R2065", "R"], ["32022L2555", "L"], ["32022D1234", "D"]] as const) {
+      assert.deepEqual(euActForCelexReference(` ${celex.toLowerCase()} `), {
+        celex,
+        canonicalLawCode: celex,
+        documentType,
+        aliases: [],
+        officialTitle: celex,
+      });
+    }
+  });
+
+  it("fails closed for non-resolvable CELEX values and unknown aliases", () => {
+    for (const value of ["bad", "02022R2065", "52022R2065", "32022C2065", "DSA"]) {
+      assert.equal(euActForCelexReference(value), null, value);
+    }
   });
 });
 

@@ -157,6 +157,26 @@ describe("jurisdiction enrichment", () => {
       null,
     );
   });
+
+  it("parses valid unregistered CELEX articles only for EU", () => {
+    for (const [input, lawCode, section] of [
+      ["32022R2065 Art. 12", "32022R2065", "12"],
+      ["Art. 7 32022L2555", "32022L2555", "7"],
+      ["CELEX:32022D1234 Art. 1", "32022D1234", "1"],
+    ] as const) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+        lawCode,
+        section,
+        referenceType: "article",
+        jurisdiction: "EU",
+      });
+      assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "DE"), null);
+    }
+
+    for (const input of ["bad Art. 1", "02022R2065 Art. 1", "52022R2065 Art. 1", "32022C2065 Art. 1", "DSA Art. 1"]) {
+      assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "EU"), null, input);
+    }
+  });
   it("keeps Deutschland selection DE/default-compatible for bare StGB", () => {
     assert.deepEqual(
       parseLawReferenceWithSelectedJurisdiction("StGB § 75", "DE"),
