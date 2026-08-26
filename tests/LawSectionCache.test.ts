@@ -65,10 +65,10 @@ describe("lawSectionCacheKey", () => {
   });
 
   it("isolates EU official language cache keys without legacy fallback", async () => {
-    const de = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    const de = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" as const };
     const en = { ...de, language: "en" as const };
-    assert.equal(lawSectionCacheKey(de), "EU:DSGVO:art:6:de"); assert.equal(lawSectionCacheKey(en), "EU:DSGVO:art:6:en");
-    const cache = new InMemoryLawSectionCache(); await cache.set(section({ ...de, language: "de", jurisdiction: "EU", referenceType: "article", lawCode: "DSGVO", text: "Deutsch" }));
+    assert.equal(lawSectionCacheKey(de), "EU:32016R0679:art:6:de"); assert.equal(lawSectionCacheKey(en), "EU:32016R0679:art:6:en");
+    const cache = new InMemoryLawSectionCache(); await cache.set(section({ ...de, language: "de", jurisdiction: "EU", referenceType: "article", lawCode: "DSGVO", euCelex: "32016R0679", text: "Deutsch" }));
     assert.equal((await cache.get(en))?.text, undefined); assert.equal((await cache.get(de))?.text, "Deutsch");
   });
   it("normalizes law code for cache keys", () => {
@@ -173,6 +173,122 @@ describe("lawSectionCacheKey", () => {
     assert.equal(chKey, "CH:ZGB:art:1:official-de");
     assert.equal(deKey, "ZGB:art:1:official-de");
     assert.notEqual(chKey, deKey);
+  });
+
+  it("uses exact CELEX-based EU cache keys for DSGVO", () => {
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    assert.equal(lawSectionCacheKey(ref), "EU:32016R0679:art:6:de");
+  });
+
+  it("uses exact CELEX-based EU cache keys for AI Act", () => {
+    const ref = { lawCode: "AIACT", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "en" as const, euCelex: "32024R1689" };
+    assert.equal(lawSectionCacheKey(ref), "EU:32024R1689:art:1:en");
+  });
+
+  it("uses exact CELEX-based EU cache keys for Data Act", () => {
+    const ref = { lawCode: "DATA_ACT", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32023R2854" };
+    assert.equal(lawSectionCacheKey(ref), "EU:32023R2854:art:1:de");
+  });
+
+  it("DSGVO alias and direct CELEX produce the same EU cache key", () => {
+    const aliasRef = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    const directRef = { lawCode: "32016R0679", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    assert.equal(lawSectionCacheKey(aliasRef), lawSectionCacheKey(directRef));
+  });
+
+  it("AI Act alias and direct CELEX produce the same EU cache key", () => {
+    const aliasRef = { lawCode: "AIACT", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32024R1689" };
+    const directRef = { lawCode: "32024R1689", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32024R1689" };
+    assert.equal(lawSectionCacheKey(aliasRef), lawSectionCacheKey(directRef));
+  });
+
+  it("EU cache keys have no legacy lawCode fallback", () => {
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    const key = lawSectionCacheKey(ref);
+    assert.ok(key);
+    assert.ok(key.startsWith("EU:32016R0679:"));
+    assert.doesNotMatch(key, /EU:DSGVO:/);
+  });
+
+  it("EU cache keys are isolated by language with no cross-language fallback", async () => {
+    const deRef = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    const enRef = { ...deRef, language: "en" as const };
+    assert.notEqual(lawSectionCacheKey(deRef), lawSectionCacheKey(enRef));
+    const cache = new InMemoryLawSectionCache();
+    await cache.set(section({ ...deRef, text: "Deutsch" }));
+    assert.equal((await cache.get(enRef))?.text, undefined);
+    assert.equal((await cache.get(deRef))?.text, "Deutsch");
+  });
+
+  it("returns null for EU cache key when CELEX is missing", () => {
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    assert.equal(lawSectionCacheKey(ref), null);
+  });
+
+  it("returns null for malformed EU CELEX", () => {
+    const base = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "MALFORMED" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R067" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R06789" }), null);
+  });
+
+  it("returns null for non-sector-3 EU CELEX", () => {
+    const base = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "02016R0679" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "52016R0679" }), null);
+  });
+
+  it("returns null for unsupported EU CELEX document type", () => {
+    const base = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016C0679" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016A0679" }), null);
+  });
+
+  it("does not create or read EU:UNKNOWN cache entries", async () => {
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    const cache = new InMemoryLawSectionCache();
+    const sectionWithNoCelex = section({ ...ref, text: "Test" });
+    await cache.set(sectionWithNoCelex);
+    assert.equal((await cache.get(ref))?.text, undefined);
+  });
+
+  it("StoredLawSectionCache skips write and read for EU references without CELEX", async () => {
+    let savedEntries: Record<string, LawSection> | null = null;
+    const cache = new StoredLawSectionCache({
+      async load() { return savedEntries; },
+      async save(entries) { savedEntries = entries; },
+    });
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const };
+    await cache.set(section({ ...ref, text: "Test" }));
+    assert.equal(savedEntries, null);
+    assert.equal(await cache.get(ref), null);
+  });
+
+  it("InMemoryLawSectionCache skips write and read for malformed EU CELEX", async () => {
+    const cache = new InMemoryLawSectionCache();
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "MALFORMED" };
+    await cache.set(section({ ...ref, text: "Test" }));
+    assert.equal((await cache.get(ref))?.text, undefined);
+  });
+
+  it("StoredLawSectionCache skips write and read for malformed EU CELEX", async () => {
+    let savedEntries: Record<string, LawSection> | null = null;
+    const cache = new StoredLawSectionCache({
+      async load() { return savedEntries; },
+      async save(entries) { savedEntries = entries; },
+    });
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016C0679" };
+    await cache.set(section({ ...ref, text: "Test" }));
+    assert.equal(savedEntries, null);
+    assert.equal(await cache.get(ref), null);
+  });
+
+  it("InMemoryLawSectionCache skips write and read for non-sector-3 EU CELEX", async () => {
+    const cache = new InMemoryLawSectionCache();
+    const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "02016R0679" };
+    await cache.set(section({ ...ref, text: "Test" }));
+    assert.equal((await cache.get(ref))?.text, undefined);
   });
 });
 

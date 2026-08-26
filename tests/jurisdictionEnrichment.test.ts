@@ -26,6 +26,8 @@ describe("jurisdiction enrichment", () => {
         section: "6",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32016R0679",
+        euDocumentType: "R",
       });
     }
 
@@ -84,6 +86,8 @@ describe("jurisdiction enrichment", () => {
         section: "1",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32024R1689",
+        euDocumentType: "R",
       });
     }
 
@@ -110,6 +114,8 @@ describe("jurisdiction enrichment", () => {
         section: "1",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32023R2854",
+        euDocumentType: "R",
       });
     }
 
@@ -131,6 +137,8 @@ describe("jurisdiction enrichment", () => {
         section: "6",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32016R0679",
+        euDocumentType: "R",
       });
     }
 
@@ -141,6 +149,8 @@ describe("jurisdiction enrichment", () => {
         section: "1",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32024R1689",
+        euDocumentType: "R",
       },
     );
     assert.deepEqual(
@@ -150,6 +160,8 @@ describe("jurisdiction enrichment", () => {
         section: "1",
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: "32023R2854",
+        euDocumentType: "R",
       },
     );
     assert.equal(
@@ -169,6 +181,8 @@ describe("jurisdiction enrichment", () => {
         section,
         referenceType: "article",
         jurisdiction: "EU",
+        euCelex: lawCode,
+        euDocumentType: lawCode.includes("R") ? "R" : lawCode.includes("L") ? "L" : "D",
       });
       assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "DE"), null);
     }
@@ -715,6 +729,55 @@ describe("CH Phase 1C exact contract matrix", () => {
         jurisdiction: "CH",
       },
     );
+  });
+});
+
+describe("EU CELEX identity equivalence", () => {
+  it("DSGVO alias and direct 32016R0679 produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("DSGVO Art. 6", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("32016R0679 Art. 6", "EU")!;
+    assert.equal(alias.lawCode, direct.lawCode);
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.section, direct.section);
+    assert.equal(alias.referenceType, direct.referenceType);
+    assert.equal(alias.jurisdiction, direct.jurisdiction);
+    assert.equal(alias.euCelex, "32016R0679");
+    assert.equal(alias.euDocumentType, "R");
+  });
+
+  it("GDPR alias and direct 32016R0679 produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("GDPR Art. 6", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("32016R0679 Art. 6", "EU")!;
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.lawCode, direct.lawCode);
+  });
+
+  it("AIACT alias and direct 32024R1689 produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("AIACT Art. 1", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("32024R1689 Art. 1", "EU")!;
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.lawCode, direct.lawCode);
+    assert.equal(alias.euCelex, "32024R1689");
+  });
+
+  it("DATA_ACT alias and direct 32023R2854 produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("DATA_ACT Art. 1", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("32023R2854 Art. 1", "EU")!;
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.lawCode, direct.lawCode);
+    assert.equal(alias.euCelex, "32023R2854");
+  });
+
+  it("Art. form alias and direct CELEX produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("Art. 6 DSGVO", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("Art. 6 CELEX 32016R0679", "EU")!;
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.lawCode, direct.lawCode);
   });
 });
 

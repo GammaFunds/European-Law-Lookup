@@ -181,7 +181,7 @@ export function enrichJurisdiction(
   }
   if (selectedJurisdiction === "EU" && !reference.jurisdiction && reference.referenceType === "article") {
     const act = euActForLawCode(reference.lawCode);
-    if (act) return { ...reference, lawCode: act.canonicalLawCode, jurisdiction: "EU" };
+    if (act) return { ...reference, lawCode: act.canonicalLawCode, jurisdiction: "EU", euCelex: act.celex, euDocumentType: act.documentType };
   }
   return reference;
 }
@@ -198,7 +198,7 @@ export function parseLawReferenceWithSelectedJurisdiction(
     if (euArticle) {
       const act = euActForLawCode(euArticle[1] ?? euArticle[4]);
       if (act) {
-        return { lawCode: act.canonicalLawCode, section: euArticle[2] ?? euArticle[3], referenceType: "article", jurisdiction: "EU" };
+        return { lawCode: act.canonicalLawCode, section: euArticle[2] ?? euArticle[3], referenceType: "article", jurisdiction: "EU", euCelex: act.celex, euDocumentType: act.documentType };
       }
     }
   }
@@ -288,6 +288,8 @@ function parseEuCelexArticle(input: string): ParsedLawReference | null {
     section,
     referenceType: "article",
     jurisdiction: "EU",
+    euCelex: act.celex,
+    euDocumentType: act.documentType,
   };
 }
 

@@ -15,6 +15,8 @@ export interface LawReference {
   language?: EuLawLanguage;
   subsection?: string;
   sentence?: string;
+  euCelex?: string;
+  euDocumentType?: EuDocumentType;
 }
 
 export interface LawSection {
@@ -37,6 +39,8 @@ export interface LawSection {
   cacheStatus: "live" | "cached" | "stale";
   isOfficialSource: boolean;
   isAuthoritativeText: boolean;
+  euCelex?: string;
+  euDocumentType?: EuDocumentType;
 }
 
 export interface LawSearchResult {

@@ -143,4 +143,22 @@ describe("parseEuCelex", () => {
       assert.equal(parseEuCelex(value), null, value);
     }
   });
+
+  it("validates CELEX sector/type/year/number consistency in registry", () => {
+    const entry32016R0679 = euActForCelex("32016R0679");
+    assert.ok(entry32016R0679);
+    assert.equal(entry32016R0679.documentType, "R");
+    const entry32024R1689 = euActForCelex("32024R1689");
+    assert.ok(entry32024R1689);
+    assert.equal(entry32024R1689.documentType, "R");
+    const entry32023R2854 = euActForCelex("32023R2854");
+    assert.ok(entry32023R2854);
+    assert.equal(entry32023R2854.documentType, "R");
+  });
+
+  it("does not create synthetic entries for sector/CELEX combos that fail parseEuCelex", () => {
+    assert.equal(euActForCelexReference("02016R0679"), null);
+    assert.equal(euActForCelexReference("52016R0679"), null);
+    assert.equal(euActForCelexReference("32016C0679"), null);
+  });
 });

@@ -98,3 +98,50 @@ export function parseEuCelex(value: string): ParsedEuCelex | null {
     number: match[3],
   };
 }
+
+function validateEuActRegistry(entries: readonly EuActEntry[]): void {
+  const seenCelex = new Map<string, string>();
+  const seenCanonical = new Map<string, string>();
+  const seenAlias = new Map<string, string>();
+
+  for (const entry of entries) {
+    const parsed = parseEuCelex(entry.celex);
+    if (!parsed) {
+      throw new Error(`EU act registry: invalid CELEX format "${entry.celex}".`);
+    }
+    if (parsed.documentType !== entry.documentType) {
+      throw new Error(
+        `EU act registry: CELEX "${entry.celex}" declares documentType "${entry.documentType}" but parsed "${parsed.documentType}".`,
+      );
+    }
+
+    const existingCelex = seenCelex.get(entry.celex);
+    if (existingCelex) {
+      throw new Error(
+        `EU act registry: duplicate CELEX "${entry.celex}" (first: "${existingCelex}").`,
+      );
+    }
+    seenCelex.set(entry.celex, entry.canonicalLawCode);
+
+    const existingCanonical = seenCanonical.get(entry.canonicalLawCode);
+    if (existingCanonical) {
+      throw new Error(
+        `EU act registry: duplicate canonicalLawCode "${entry.canonicalLawCode}" (CELEX "${entry.celex}" vs "${existingCanonical}").`,
+      );
+    }
+    seenCanonical.set(entry.canonicalLawCode, entry.celex);
+
+    for (const alias of entry.aliases) {
+      const normalizedAlias = alias.toUpperCase();
+      const existingAlias = seenAlias.get(normalizedAlias);
+      if (existingAlias) {
+        throw new Error(
+          `EU act registry: duplicate alias "${alias}" (case-insensitive; entry "${entry.celex}" vs "${existingAlias}").`,
+        );
+      }
+      seenAlias.set(normalizedAlias, entry.celex);
+    }
+  }
+}
+
+validateEuActRegistry(EU_ACTS);

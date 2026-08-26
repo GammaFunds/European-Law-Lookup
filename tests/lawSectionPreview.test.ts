@@ -233,4 +233,89 @@ describe("lawSectionPreview", () => {
       "Cache: cached.",
     ]);
   });
+
+  it("includes CELEX metadata for EU previews", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "eur-lex",
+      providerLabel: "EUR-Lex",
+      lawCode: "DSGVO",
+      lawTitle: "Regulation (EU) 2016/679",
+      section: "6",
+      referenceType: "article",
+      jurisdiction: "EU",
+      language: "de",
+      text: "Rechtmäßigkeit der Verarbeitung.",
+      retrievedAt: "2026-07-10T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+      euCelex: "32016R0679",
+      euDocumentType: "R",
+    });
+
+    assert.ok(preview.metadataLines.some((l) => l === "CELEX: 32016R0679."));
+  });
+
+  it("includes CELEX metadata even when metadata footer is disabled", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "eur-lex",
+      providerLabel: "EUR-Lex",
+      lawCode: "DSGVO",
+      lawTitle: "Regulation (EU) 2016/679",
+      section: "6",
+      referenceType: "article",
+      jurisdiction: "EU",
+      language: "de",
+      text: "Rechtmäßigkeit der Verarbeitung.",
+      retrievedAt: "2026-07-10T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+      euCelex: "32016R0679",
+      euDocumentType: "R",
+    }, { includeMetadataFooter: false });
+
+    assert.ok(preview.metadataLines.some((l) => l === "CELEX: 32016R0679."));
+    assert.ok(!preview.metadataLines.some((l) => l.startsWith("Quelle:")));
+    assert.ok(!preview.metadataLines.some((l) => l.startsWith("Cache:")));
+  });
+
+  it("does not include CELEX metadata for DE previews", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "gesetze-im-internet",
+      providerLabel: "Gesetze im Internet",
+      sourceUrl: "https://www.gesetze-im-internet.de/stgb/__242.html",
+      lawCode: "StGB",
+      lawTitle: "Strafgesetzbuch",
+      section: "242",
+      heading: "Diebstahl",
+      text: "(1) Wer eine fremde bewegliche Sache wegnimmt.",
+      retrievedAt: "2026-06-01T12:34:56.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.ok(!preview.metadataLines.some((l) => l.includes("CELEX")));
+  });
+
+  it("does not include CELEX metadata for AT previews", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "ris",
+      providerLabel: "RIS / Rechtsinformationssystem des Bundes",
+      sourceUrl: "https://www.ris.bka.gv.at/NormDokument.wxe",
+      lawCode: "ABGB",
+      lawTitle: "Allgemeines bürgerliches Gesetzbuch",
+      section: "1295",
+      jurisdiction: "AT",
+      heading: "Schadenersatz",
+      text: "(1) Jedermann ist berechtigt.",
+      retrievedAt: "2026-06-01T12:34:56.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.ok(!preview.metadataLines.some((l) => l.includes("CELEX")));
+  });
 });

@@ -292,4 +292,87 @@ describe("formatLawSectionAsMarkdown", () => {
       /^Textvariante: Englischer Gesetzestext von Gesetze im Internet \(nicht amtlich\)\.$/m,
     );
   });
+
+  it("includes CELEX metadata for EU sections", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "eur-lex",
+      providerLabel: "EUR-Lex",
+      lawCode: "DSGVO",
+      lawTitle: "Regulation (EU) 2016/679",
+      section: "6",
+      referenceType: "article",
+      jurisdiction: "EU",
+      language: "de",
+      text: "Rechtmäßigkeit der Verarbeitung.",
+      retrievedAt: "2026-07-10T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+      euCelex: "32016R0679",
+      euDocumentType: "R",
+    });
+
+    assert.match(markdown, /CELEX: 32016R0679\./m);
+  });
+
+  it("includes CELEX metadata even when metadata footer is disabled", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "eur-lex",
+      providerLabel: "EUR-Lex",
+      lawCode: "DSGVO",
+      lawTitle: "Regulation (EU) 2016/679",
+      section: "6",
+      referenceType: "article",
+      jurisdiction: "EU",
+      language: "de",
+      text: "Rechtmäßigkeit der Verarbeitung.",
+      retrievedAt: "2026-07-10T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+      euCelex: "32016R0679",
+      euDocumentType: "R",
+    }, { includeMetadataFooter: false });
+
+    assert.match(markdown, /CELEX: 32016R0679\./m);
+    assert.doesNotMatch(markdown, /^Quelle:/m);
+    assert.doesNotMatch(markdown, /^Cache:/m);
+  });
+
+  it("does not include CELEX metadata for DE sections", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "gesetze-im-internet",
+      providerLabel: "Gesetze im Internet",
+      lawCode: "StGB",
+      lawTitle: "Strafgesetzbuch",
+      section: "242",
+      heading: "Diebstahl",
+      text: "Wer eine fremde bewegliche Sache wegnimmt.",
+      retrievedAt: "2026-05-20T12:34:56.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.doesNotMatch(markdown, /CELEX:/);
+  });
+
+  it("does not include CELEX metadata for AT sections", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "ris",
+      providerLabel: "RIS / Rechtsinformationssystem des Bundes",
+      lawCode: "ABGB",
+      lawTitle: "Allgemeines bürgerliches Gesetzbuch",
+      section: "1295",
+      jurisdiction: "AT",
+      heading: "Schadenersatz",
+      text: "Jedermann ist berechtigt.",
+      retrievedAt: "2026-06-01T12:34:56.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.doesNotMatch(markdown, /CELEX:/);
+  });
 });

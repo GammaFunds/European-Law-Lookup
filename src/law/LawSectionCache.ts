@@ -3,6 +3,7 @@ import { normalizeReferenceType } from "./referenceLabel";
 import type { LawProvider } from "./LawProvider";
 import type { LawReference, LawSection, LawSourceVariant } from "./types";
 import { isEuLawLanguage } from "./euLanguages";
+import { parseEuCelex } from "./euActRegistry";
 
 export interface LawSectionCache {
   get(reference: LawReference): Promise<LawSection | null>;
@@ -24,12 +25,25 @@ export function normalizeLawSourceVariant(sourceVariant?: LawSourceVariant): Law
   return sourceVariant === "translation-en" ? "translation-en" : "official-de";
 }
 
-export function lawSectionCacheKey(reference: LawReference): string {
+export function lawSectionCacheKey(reference: LawReference): string | null {
   if (reference.jurisdiction === "EU") {
-    return `EU:${legacyLawSectionCacheKey(reference)}:${isEuLawLanguage(reference.language) ? reference.language : "de"}`;
+    const celex = reference.euCelex?.trim().toUpperCase();
+    if (!celex) return null;
+    if (!parseEuCelex(celex)) return null;
+    return `EU:${celex}:${euSectionKey(reference)}:${isEuLawLanguage(reference.language) ? reference.language : "de"}`;
   }
   const jurisdiction = reference.jurisdiction === "AT" ? "AT:" : reference.jurisdiction === "CH" ? "CH:" : "";
   return `${jurisdiction}${legacyLawSectionCacheKey(reference)}:${normalizeLawSourceVariant(reference.sourceVariant)}`;
+}
+
+function euSectionKey(reference: LawReference): string {
+  const section = reference.section.trim().toLowerCase();
+  const subsection = reference.subsection?.trim().toLowerCase();
+  if (normalizeReferenceType(reference.referenceType) === "article") {
+    if (subsection) return `art:${section}:sec:${subsection}`;
+    return `art:${section}`;
+  }
+  return section;
 }
 
 function legacyLawSectionCacheKey(reference: LawReference): string {
@@ -49,7 +63,11 @@ function legacyLawSectionCacheKey(reference: LawReference): string {
 
 function cacheKeysForRead(reference: LawReference): string[] {
   const key = lawSectionCacheKey(reference);
-  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH" || reference.jurisdiction === "EU") {
+  if (key === null) return [];
+  if (reference.jurisdiction === "EU") {
+    return [key];
+  }
+  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH") {
     return [key];
   }
 
@@ -58,7 +76,7 @@ function cacheKeysForRead(reference: LawReference): string[] {
       key,
       lawSectionCacheKey({ ...reference, sourceVariant: "official-de" }),
       legacyLawSectionCacheKey(reference),
-    ];
+    ].filter((k): k is string => k !== null);
   }
 
   return [key, legacyLawSectionCacheKey(reference)];
@@ -79,7 +97,9 @@ export class InMemoryLawSectionCache implements LawSectionCache {
   }
 
   async set(section: LawSection): Promise<void> {
-    this.entries.set(lawSectionCacheKey(section), cloneLawSection(section));
+    const key = lawSectionCacheKey(section);
+    if (key === null) return;
+    this.entries.set(key, cloneLawSection(section));
   }
 }
 
@@ -99,8 +119,10 @@ export class StoredLawSectionCache implements LawSectionCache {
   }
 
   async set(section: LawSection): Promise<void> {
+    const key = lawSectionCacheKey(section);
+    if (key === null) return;
     const entries = { ...((await this.storage.load()) ?? {}) };
-    entries[lawSectionCacheKey(section)] = cloneLawSection(section);
+    entries[key] = cloneLawSection(section);
     await this.storage.save(entries);
   }
 }
