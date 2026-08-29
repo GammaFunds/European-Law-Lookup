@@ -172,8 +172,8 @@ describe("jurisdiction enrichment", () => {
 
   it("parses valid unregistered CELEX articles only for EU", () => {
     for (const [input, lawCode, section] of [
-      ["32022R2065 Art. 12", "32022R2065", "12"],
-      ["Art. 7 32022L2555", "32022L2555", "7"],
+      ["32022R2066 Art. 12", "32022R2066", "12"],
+      ["Art. 7 32022L2555", "NIS2", "7"],
       ["CELEX:32022D1234 Art. 1", "32022D1234", "1"],
     ] as const) {
       assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
@@ -181,13 +181,13 @@ describe("jurisdiction enrichment", () => {
         section,
         referenceType: "article",
         jurisdiction: "EU",
-        euCelex: lawCode,
-        euDocumentType: lawCode.includes("R") ? "R" : lawCode.includes("L") ? "L" : "D",
+        euCelex: lawCode === "NIS2" ? "32022L2555" : lawCode,
+        euDocumentType: lawCode === "NIS2" ? "L" : lawCode.includes("R") ? "R" : lawCode.includes("L") ? "L" : "D",
       });
       assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "DE"), null);
     }
 
-    for (const input of ["bad Art. 1", "02022R2065 Art. 1", "52022R2065 Art. 1", "32022C2065 Art. 1", "DSA Art. 1"]) {
+    for (const input of ["bad Art. 1", "02022R2065 Art. 1", "52022R2065 Art. 1", "32022C2065 Art. 1"]) {
       assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "EU"), null, input);
     }
   });
@@ -618,6 +618,218 @@ describe("jurisdiction enrichment", () => {
       },
     );
   });
+
+  describe("NIS2 jurisdiction enrichment", () => {
+    it("resolves NIS2 alias to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("NIS2 Art. 7", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "7",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("resolves Art. form NIS2 alias to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("Art. 7 NIS2", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "7",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("rejects NIS2 alias under DE jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS2 Art. 7", "DE"),
+        null,
+      );
+    });
+
+    it("rejects NIS2 alias under AT jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS2 Art. 7", "AT"),
+        null,
+      );
+    });
+
+    it("rejects NIS2 alias under CH jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS2 Art. 7", "CH"),
+        null,
+      );
+    });
+
+    it("canonicalizes direct CELEX 32022L2555 to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("32022L2555 Art. 7", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "7",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("resolves hyphenated NIS-2 alias to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("NIS-2 Art. 21", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "21",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("resolves spaced NIS 2 alias to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("NIS 2 Art. 21", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "21",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("resolves Art. form spaced NIS 2 alias to NIS2 under EU jurisdiction", () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction("Art. 21 NIS 2", "EU"),
+        {
+          lawCode: "NIS2",
+          section: "21",
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: "32022L2555",
+          euDocumentType: "L",
+        },
+      );
+    });
+
+    it("rejects spaced NIS 2 alias under DE jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS 2 Art. 21", "DE"),
+        null,
+      );
+    });
+
+    it("rejects spaced NIS 2 alias under AT jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS 2 Art. 21", "AT"),
+        null,
+      );
+    });
+
+    it("rejects spaced NIS 2 alias under CH jurisdiction", () => {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction("NIS 2 Art. 21", "CH"),
+        null,
+      );
+    });
+  });
+});
+
+describe("Batch 1 EU digital/cyber acts jurisdiction enrichment", () => {
+  const acts = [
+    {
+      canonicalLawCode: "DSA",
+      celex: "32022R2065",
+      aliases: ["DSA", "DIGITAL SERVICES ACT"],
+      section: "16",
+      longNameInput: "DIGITAL SERVICES ACT Art. 16",
+    },
+    {
+      canonicalLawCode: "DMA",
+      celex: "32022R1925",
+      aliases: ["DMA", "DIGITAL MARKETS ACT"],
+      section: "5",
+      longNameInput: "DIGITAL MARKETS ACT Art. 5",
+    },
+    {
+      canonicalLawCode: "DORA",
+      celex: "32022R2554",
+      aliases: ["DORA"],
+      section: "6",
+      longNameInput: "DORA Art. 6",
+    },
+    {
+      canonicalLawCode: "CRA",
+      celex: "32024R2847",
+      aliases: ["CRA", "CYBER RESILIENCE ACT"],
+      section: "13",
+      longNameInput: "CYBER RESILIENCE ACT Art. 13",
+    },
+    {
+      canonicalLawCode: "DGA",
+      celex: "32022R0868",
+      aliases: ["DGA", "DATA GOVERNANCE ACT"],
+      section: "5",
+      longNameInput: "DATA GOVERNANCE ACT Art. 5",
+    },
+  ] as const;
+
+  for (const act of acts) {
+    it(`isolates ${act.canonicalLawCode} aliases to the selected EU jurisdiction`, () => {
+      const acceptedForms = [
+        ...act.aliases.map((alias) => `${alias} Art. ${act.section}`),
+        ...act.aliases.map((alias) => `Art. ${act.section} ${alias}`),
+      ];
+
+      for (const input of acceptedForms) {
+        assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+          lawCode: act.canonicalLawCode,
+          section: act.section,
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: act.celex,
+          euDocumentType: "R",
+        });
+      }
+
+      for (const jurisdiction of ["DE", "AT", "CH"] as const) {
+        for (const input of acceptedForms) {
+          assert.equal(parseLawReferenceWithSelectedJurisdiction(input, jurisdiction), null);
+        }
+      }
+    });
+
+    it(`canonicalizes direct CELEX ${act.celex} to ${act.canonicalLawCode} under EU jurisdiction`, () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction(`${act.celex} Art. ${act.section}`, "EU"),
+        {
+          lawCode: act.canonicalLawCode,
+          section: act.section,
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: act.celex,
+          euDocumentType: "R",
+        },
+      );
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction(`${act.celex} Art. ${act.section}`, "DE"),
+        null,
+      );
+    });
+  }
 });
 
 describe("CH Phase 1C exact contract matrix", () => {
@@ -779,6 +991,19 @@ describe("EU CELEX identity equivalence", () => {
     assert.equal(alias.euDocumentType, direct.euDocumentType);
     assert.equal(alias.lawCode, direct.lawCode);
   });
+
+  it("NIS2 alias and direct 32022L2555 produce identical technical identity", () => {
+    const alias = parseLawReferenceWithSelectedJurisdiction("NIS2 Art. 7", "EU")!;
+    const direct = parseLawReferenceWithSelectedJurisdiction("32022L2555 Art. 7", "EU")!;
+    assert.equal(alias.lawCode, direct.lawCode);
+    assert.equal(alias.euCelex, direct.euCelex);
+    assert.equal(alias.euDocumentType, direct.euDocumentType);
+    assert.equal(alias.section, direct.section);
+    assert.equal(alias.referenceType, direct.referenceType);
+    assert.equal(alias.jurisdiction, direct.jurisdiction);
+    assert.equal(alias.euCelex, "32022L2555");
+    assert.equal(alias.euDocumentType, "L");
+  });
 });
 
 describe("CH Phase 1D exact contract matrix", () => {
@@ -865,4 +1090,68 @@ describe("CH Phase 1D exact contract matrix", () => {
       },
     );
   });
+});
+
+describe("Wave 2 EU legal acts jurisdiction enrichment", () => {
+  const acts = [
+    { canonicalLawCode: "CER", celex: "32022L2557", documentType: "L" as const, aliases: ["CER", "CER DIRECTIVE", "CRITICAL ENTITIES RESILIENCE DIRECTIVE"], section: "10", longNameInput: "CRITICAL ENTITIES RESILIENCE DIRECTIVE Art. 10" },
+    { canonicalLawCode: "EIDAS2", celex: "32024R1183", documentType: "R" as const, aliases: ["EIDAS2", "EIDAS 2", "EIDAS-2", "EUROPEAN DIGITAL IDENTITY FRAMEWORK"], section: "1", longNameInput: "EUROPEAN DIGITAL IDENTITY FRAMEWORK Art. 1" },
+    { canonicalLawCode: "MICA", celex: "32023R1114", documentType: "R" as const, aliases: ["MICA", "MI-CA", "MARKETS IN CRYPTO-ASSETS"], section: "4", longNameInput: "MARKETS IN CRYPTO-ASSETS Art. 4" },
+    { canonicalLawCode: "TFR", celex: "32023R1113", documentType: "R" as const, aliases: ["TFR", "TRANSFER OF FUNDS REGULATION"], section: "4", longNameInput: "TRANSFER OF FUNDS REGULATION Art. 4" },
+    { canonicalLawCode: "OPEN_DATA", celex: "32019L1024", documentType: "L" as const, aliases: ["OPEN_DATA", "OPEN DATA", "OPEN DATA DIRECTIVE"], section: "5", longNameInput: "OPEN DATA DIRECTIVE Art. 5" },
+    { canonicalLawCode: "DSM_COPYRIGHT", celex: "32019L0790", documentType: "L" as const, aliases: ["DSM_COPYRIGHT", "DSM COPYRIGHT", "DSM COPYRIGHT DIRECTIVE"], section: "17", longNameInput: "DSM COPYRIGHT DIRECTIVE Art. 17" },
+    { canonicalLawCode: "DCD", celex: "32019L0770", documentType: "L" as const, aliases: ["DCD", "DIGITAL CONTENT DIRECTIVE"], section: "5", longNameInput: "DIGITAL CONTENT DIRECTIVE Art. 5" },
+    { canonicalLawCode: "SGD", celex: "32019L0771", documentType: "L" as const, aliases: ["SGD", "SALE OF GOODS DIRECTIVE"], section: "5", longNameInput: "SALE OF GOODS DIRECTIVE Art. 5" },
+    { canonicalLawCode: "OMNIBUS", celex: "32019L2161", documentType: "L" as const, aliases: ["OMNIBUS", "OMNIBUS DIRECTIVE"], section: "1", longNameInput: "OMNIBUS DIRECTIVE Art. 1" },
+    { canonicalLawCode: "FFNPD", celex: "32018R1807", documentType: "R" as const, aliases: ["FFNPD", "FREE FLOW OF NON-PERSONAL DATA"], section: "4", longNameInput: "FREE FLOW OF NON-PERSONAL DATA Art. 4" },
+    { canonicalLawCode: "TCO", celex: "32021R0784", documentType: "R" as const, aliases: ["TCO", "TERRORIST CONTENT ONLINE", "TERRORIST CONTENT ONLINE REGULATION"], section: "3", longNameInput: "TERRORIST CONTENT ONLINE REGULATION Art. 3" },
+    { canonicalLawCode: "E_EVIDENCE_REG", celex: "32023R1543", documentType: "R" as const, aliases: ["E_EVIDENCE_REG", "E-EVIDENCE REGULATION", "E EVIDENCE REGULATION"], section: "5", longNameInput: "E-EVIDENCE REGULATION Art. 5" },
+    { canonicalLawCode: "E_EVIDENCE_DIR", celex: "32023L1544", documentType: "L" as const, aliases: ["E_EVIDENCE_DIR", "E-EVIDENCE DIRECTIVE", "E EVIDENCE DIRECTIVE"], section: "3", longNameInput: "E-EVIDENCE DIRECTIVE Art. 3" },
+    { canonicalLawCode: "ECSP", celex: "32020R1503", documentType: "R" as const, aliases: ["ECSP", "CROWDFUNDING REGULATION", "EUROPEAN CROWDFUNDING SERVICE PROVIDERS"], section: "4", longNameInput: "EUROPEAN CROWDFUNDING SERVICE PROVIDERS Art. 4" },
+    { canonicalLawCode: "GPSR", celex: "32023R0988", documentType: "R" as const, aliases: ["GPSR", "GENERAL PRODUCT SAFETY REGULATION"], section: "5", longNameInput: "GENERAL PRODUCT SAFETY REGULATION Art. 5" },
+  ] as const;
+
+  for (const act of acts) {
+    it(`isolates ${act.canonicalLawCode} aliases to the selected EU jurisdiction`, () => {
+      const acceptedForms = [
+        ...act.aliases.map((alias) => `${alias} Art. ${act.section}`),
+        ...act.aliases.map((alias) => `Art. ${act.section} ${alias}`),
+      ];
+
+      for (const input of acceptedForms) {
+        assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "EU"), {
+          lawCode: act.canonicalLawCode,
+          section: act.section,
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: act.celex,
+          euDocumentType: act.documentType,
+        });
+      }
+
+      for (const jurisdiction of ["DE", "AT", "CH"] as const) {
+        for (const input of acceptedForms) {
+          assert.equal(parseLawReferenceWithSelectedJurisdiction(input, jurisdiction), null);
+        }
+      }
+    });
+
+    it(`canonicalizes direct CELEX ${act.celex} to ${act.canonicalLawCode} under EU jurisdiction`, () => {
+      assert.deepEqual(
+        parseLawReferenceWithSelectedJurisdiction(`${act.celex} Art. ${act.section}`, "EU"),
+        {
+          lawCode: act.canonicalLawCode,
+          section: act.section,
+          referenceType: "article",
+          jurisdiction: "EU",
+          euCelex: act.celex,
+          euDocumentType: act.documentType,
+        },
+      );
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction(`${act.celex} Art. ${act.section}`, "DE"),
+        null,
+      );
+    });
+  }
 });

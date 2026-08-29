@@ -88,6 +88,28 @@ describe("EurLexLawProvider", () => {
     );
   });
 
+  it("maps Batch 1 curated acts through the generic act mapping (no act-specific provider code)", () => {
+    const acts = [
+      { celex: "32022R2065", lawCode: "DSA", eli: "https://eur-lex.europa.eu/eli/reg/2022/2065/oj/deu/html" },
+      { celex: "32022R1925", lawCode: "DMA", eli: "https://eur-lex.europa.eu/eli/reg/2022/1925/oj/deu/html" },
+      { celex: "32022R2554", lawCode: "DORA", eli: "https://eur-lex.europa.eu/eli/reg/2022/2554/oj/deu/html" },
+      { celex: "32024R2847", lawCode: "CRA", eli: "https://eur-lex.europa.eu/eli/reg/2024/2847/oj/deu/html" },
+      { celex: "32022R0868", lawCode: "DGA", eli: "https://eur-lex.europa.eu/eli/reg/2022/868/oj/deu/html" },
+    ] as const;
+
+    for (const act of acts) {
+      for (const code of [act.lawCode, act.celex]) {
+        const ref = { ...reference, lawCode: code, euCelex: act.celex };
+        assert.equal(
+          buildEurLexFetchRequest(ref)?.url,
+          `https://publications.europa.eu/resource/celex/${act.celex}`,
+          code,
+        );
+        assert.equal(buildEurLexSectionUrl(ref), act.eli, code);
+      }
+    }
+  });
+
   it("resolves AI Act aliases through the generic act mapping", () => {
     const aiActRef = { ...reference, lawCode: "AIACT" };
     assert.deepEqual(buildEurLexFetchRequest(aiActRef), {
@@ -136,6 +158,38 @@ describe("EurLexLawProvider", () => {
         Accept: "application/xml;notice=identifiers",
       },
     });
+  });
+
+  it("maps Wave 2 curated acts through the generic act mapping (no act-specific provider code)", () => {
+    const acts = [
+      { celex: "32022L2557", lawCode: "CER", eli: "https://eur-lex.europa.eu/eli/dir/2022/2557/oj/deu/html" },
+      { celex: "32024R1183", lawCode: "EIDAS2", eli: "https://eur-lex.europa.eu/eli/reg/2024/1183/oj/deu/html" },
+      { celex: "32023R1114", lawCode: "MICA", eli: "https://eur-lex.europa.eu/eli/reg/2023/1114/oj/deu/html" },
+      { celex: "32023R1113", lawCode: "TFR", eli: "https://eur-lex.europa.eu/eli/reg/2023/1113/oj/deu/html" },
+      { celex: "32019L1024", lawCode: "OPEN_DATA", eli: "https://eur-lex.europa.eu/eli/dir/2019/1024/oj/deu/html" },
+      { celex: "32019L0790", lawCode: "DSM_COPYRIGHT", eli: "https://eur-lex.europa.eu/eli/dir/2019/790/oj/deu/html" },
+      { celex: "32019L0770", lawCode: "DCD", eli: "https://eur-lex.europa.eu/eli/dir/2019/770/oj/deu/html" },
+      { celex: "32019L0771", lawCode: "SGD", eli: "https://eur-lex.europa.eu/eli/dir/2019/771/oj/deu/html" },
+      { celex: "32019L2161", lawCode: "OMNIBUS", eli: "https://eur-lex.europa.eu/eli/dir/2019/2161/oj/deu/html" },
+      { celex: "32018R1807", lawCode: "FFNPD", eli: "https://eur-lex.europa.eu/eli/reg/2018/1807/oj/deu/html" },
+      { celex: "32021R0784", lawCode: "TCO", eli: "https://eur-lex.europa.eu/eli/reg/2021/784/oj/deu/html" },
+      { celex: "32023R1543", lawCode: "E_EVIDENCE_REG", eli: "https://eur-lex.europa.eu/eli/reg/2023/1543/oj/deu/html" },
+      { celex: "32023L1544", lawCode: "E_EVIDENCE_DIR", eli: "https://eur-lex.europa.eu/eli/dir/2023/1544/oj/deu/html" },
+      { celex: "32020R1503", lawCode: "ECSP", eli: "https://eur-lex.europa.eu/eli/reg/2020/1503/oj/deu/html" },
+      { celex: "32023R0988", lawCode: "GPSR", eli: "https://eur-lex.europa.eu/eli/reg/2023/988/oj/deu/html" },
+    ] as const;
+
+    for (const act of acts) {
+      for (const code of [act.lawCode, act.celex]) {
+        const ref = { ...reference, lawCode: code, euCelex: act.celex };
+        assert.equal(
+          buildEurLexFetchRequest(ref)?.url,
+          `https://publications.europa.eu/resource/celex/${act.celex}`,
+          code,
+        );
+        assert.equal(buildEurLexSectionUrl(ref), act.eli, code);
+      }
+    }
   });
 
   it("builds language-specific official ELI URLs and identifier notice requests", () => {
