@@ -1,6 +1,6 @@
 import { formatReferenceLabel } from "../law/referenceLabel";
 import type { LawSection } from "../law/types";
-import { euLanguageNativeName } from "../law/euLanguages";
+import { cellarLanguageNativeName } from "../law/euLanguages";
 
 interface LawSectionPreviewOptions {
   includeMetadataFooter?: boolean;
@@ -42,7 +42,10 @@ function buildMetadataLines(
     lines.push("Bundesrecht konsolidiert; Informationsfassung, rechtlich unverbindlich.");
   }
   if (section.jurisdiction === "EU" && section.language) {
-    lines.push(`Amtliche EU-Sprachfassung: ${euLanguageNativeName(section.language)}.`);
+    const nativeName = cellarLanguageNativeName(section.language);
+    if (nativeName) {
+      lines.push(`Amtliche EU-Sprachfassung: ${nativeName}.`);
+    }
   }
 
   if (section.jurisdiction === "EU" && section.euCelex) {

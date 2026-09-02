@@ -12,7 +12,7 @@ export interface LawReference {
   referenceType?: LawReferenceType;
   sourceVariant?: LawSourceVariant;
   jurisdiction?: LawJurisdiction;
-  language?: EuLawLanguage;
+  language?: string;
   subsection?: string;
   sentence?: string;
   euCelex?: string;
@@ -29,7 +29,7 @@ export interface LawSection {
   referenceType?: LawReferenceType;
   sourceVariant?: LawSourceVariant;
   jurisdiction?: LawJurisdiction;
-  language?: EuLawLanguage;
+  language?: string;
   subsection?: string;
   heading?: string;
   text: string;

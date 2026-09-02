@@ -151,6 +151,15 @@ describe("parseEuCelex", () => {
     });
   });
 
+  it("parses a valid six-digit sector-3 regulation", () => {
+    assert.deepEqual(parseEuCelex("32016R123456"), {
+      sector: "3",
+      year: "2016",
+      documentType: "R",
+      number: "123456",
+    });
+  });
+
   it("parses valid sector-3 directive and decision shapes", () => {
     assert.equal(parseEuCelex("32019L0790")?.documentType, "L");
     assert.equal(parseEuCelex("32019D0797")?.documentType, "D");
@@ -175,7 +184,7 @@ describe("parseEuCelex", () => {
   it("fails closed for malformed CELEX shapes", () => {
     for (const value of [
       "32016R679",
-      "32016R06790",
+      "32016R0679007",
       "32016r0679",
       "32016 R 0679",
       "32016R067X",

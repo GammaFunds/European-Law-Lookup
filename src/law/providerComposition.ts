@@ -10,11 +10,13 @@ import { MockLawProvider } from "./providers/MockLawProvider";
 import { NeurisLawProvider } from "./providers/NeurisLawProvider";
 import { RisLawProvider } from "./providers/RisLawProvider";
 import { EurLexLawProvider } from "./providers/EurLexLawProvider";
+import type { EuActLanguageAuthorizer } from "./providers/eurLexMapping";
 
 export interface ProviderCompositionOptions {
   enableMockLawProvider?: boolean;
   httpTransport?: LawProviderHttpTransport;
   requestUrl?: RequestUrlLike;
+  euActLanguageAuthorizer?: EuActLanguageAuthorizer;
 }
 
 export function buildLawProviders(options: ProviderCompositionOptions = {}): LawProvider[] {
@@ -24,7 +26,7 @@ export function buildLawProviders(options: ProviderCompositionOptions = {}): Law
     : createMissingPostTransport();
 
   const providers: LawProvider[] = [
-    new EurLexLawProvider(httpTransport),
+    new EurLexLawProvider(httpTransport, options.euActLanguageAuthorizer),
     new FedlexLawProvider(undefined, fedlexTransport),
     new NeurisLawProvider(undefined, httpTransport),
     new GesetzeImInternetProvider(undefined, httpTransport),

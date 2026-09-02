@@ -7,19 +7,30 @@ import {
   buildEurLexFetchRequest,
   buildEurLexSectionUrl,
   buildEurLexXhtmlFetchRequest,
+  EuActLanguageExpressionUnavailableError,
   isCellarUuid,
   resolveEuCelexIdentity,
+  type EuActLanguageAuthorizer,
 } from "./eurLexMapping";
 
 export class EurLexLawProvider implements LawProvider {
   readonly id = "eur-lex";
   readonly label = "EUR-Lex";
 
-  constructor(private readonly fetchFn: LawProviderHttpTransport) {}
+  constructor(
+    private readonly fetchFn: LawProviderHttpTransport,
+    private readonly languageAuthorizer?: EuActLanguageAuthorizer,
+  ) {}
 
   async getSection(reference: LawReference): Promise<LawSection | null> {
     const identity = resolveEuCelexIdentity(reference);
     if (!identity) return null;
+    const requestedLanguage = reference.language ?? "de";
+    // The local EU-act index is advisory only. Negative metadata (e.g. a
+    // requested language absent from the cached index) is NOT authoritative
+    // evidence of unavailability and must not veto a structurally valid request
+    // before the official Identifier Notice is consulted.
+    this.languageAuthorizer?.authorize(identity.celex, requestedLanguage);
     const sourceUrl = buildEurLexSectionUrl(reference);
     const fetchRequest = buildEurLexFetchRequest(reference);
     if (!sourceUrl || !fetchRequest) return null;
@@ -60,7 +71,13 @@ export class EurLexLawProvider implements LawProvider {
       );
     }
 
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+      // The Identifier Notice already proved the act exists; a 404 on the
+      // requested-language CELLAR XHTML expression is therefore authoritative
+      // evidence that this language representation is absent. It must not
+      // collapse into a generic not-found article result.
+      throw new EuActLanguageExpressionUnavailableError(identity.celex, requestedLanguage);
+    }
     if (response.status !== 200) {
       throw new LawProviderUnavailableError(
         this.id,

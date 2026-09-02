@@ -2,7 +2,7 @@ import { canonicalDisplayLawCode } from "./displayLawCode";
 import { normalizeReferenceType } from "./referenceLabel";
 import type { LawProvider } from "./LawProvider";
 import type { LawReference, LawSection, LawSourceVariant } from "./types";
-import { isEuLawLanguage } from "./euLanguages";
+import { euLanguageCacheToken } from "./euLanguages";
 import { parseEuCelex } from "./euActRegistry";
 
 export interface LawSectionCache {
@@ -30,7 +30,9 @@ export function lawSectionCacheKey(reference: LawReference): string | null {
     const celex = reference.euCelex?.trim().toUpperCase();
     if (!celex) return null;
     if (!parseEuCelex(celex)) return null;
-    return `EU:${celex}:${euSectionKey(reference)}:${isEuLawLanguage(reference.language) ? reference.language : "de"}`;
+    const languageToken = euLanguageCacheToken(reference.language);
+    if (languageToken === null) return null;
+    return `EU:${celex}:${euSectionKey(reference)}:${languageToken}`;
   }
   const jurisdiction = reference.jurisdiction === "AT" ? "AT:" : reference.jurisdiction === "CH" ? "CH:" : "";
   return `${jurisdiction}${legacyLawSectionCacheKey(reference)}:${normalizeLawSourceVariant(reference.sourceVariant)}`;

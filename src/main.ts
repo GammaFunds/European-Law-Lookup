@@ -5,7 +5,10 @@ import {
 } from "./law/LawSectionCache";
 import { ProviderRegistry } from "./law/ProviderRegistry";
 import { buildCachedLawProviders } from "./law/cachedProviderComposition";
-import { createObsidianRequestUrlTransport } from "./law/httpTransport";
+import {
+  createCellarSparqlJsonFetcher,
+  createObsidianRequestUrlTransport,
+} from "./law/httpTransport";
 import { buildLawProviders } from "./law/providerComposition";
 import {
   getSupportedGesetzeImInternetLaws,
@@ -24,8 +27,27 @@ import {
   getUiStrings,
   type UiStrings,
 } from "./ui/i18n";
-import { LawLookupModal } from "./ui/LawLookupModal";
+import { LawLookupModal, type LawLookupModalIndexProvider } from "./ui/LawLookupModal";
 import { persistCacheToggleAndRefresh } from "./settingsRefresh";
+import {
+  parseStoredEuActIndex,
+  type EuActIndex,
+  type StoredEuActIndex,
+} from "./law/euActIndex";
+import {
+  bootstrapEuActIndex,
+  reconcileEuActIndex,
+  isIndexFresh,
+  type RawEuActIndexStorage,
+} from "./law/euActIndexSync";
+import {
+  CellarMetadataClient,
+  CELLAR_WORK_RDF_ACCEPT,
+  type CellarMetadataTransport,
+} from "./law/providers/CellarMetadataClient";
+import { createEuActIndexLanguageAuthorizer } from "./law/providers/eurLexMapping";
+
+const EU_ACT_INDEX_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 interface SupportedLaw {
   displayLawCode: string;
@@ -45,6 +67,8 @@ interface DeLawPluginSettings {
 
 interface DeLawPluginData extends Partial<DeLawPluginSettings> {
   lawSectionCache?: Record<string, LawSection>;
+  euActIndex?: StoredEuActIndex;
+  euActIndexCandidate?: StoredEuActIndex;
 }
 
 const DEFAULT_SETTINGS: DeLawPluginSettings = {
@@ -59,10 +83,12 @@ const DEFAULT_SETTINGS: DeLawPluginSettings = {
 export default class DeLawPlugin extends Plugin {
   private providerRegistry!: ProviderRegistry;
   private settings: DeLawPluginSettings = { ...DEFAULT_SETTINGS };
+  private euActIndex: EuActIndex | null = null;
   private readonly uiStrings = getUiStrings(safeGetObsidianLanguage());
 
   async onload() {
     this.settings = await this.loadSettings();
+    this.euActIndex = await this.loadEuActIndexFromData();
     this.rebuildProviderRegistry();
 
     this.addSettingTab(new DeLawSettingsTab(this.app, this));
@@ -86,9 +112,95 @@ export default class DeLawPlugin extends Plugin {
             },
           },
           this.uiStrings,
+          this.createIndexProvider(),
         ).open();
       },
     });
+
+    this.addCommand({
+      id: "eu-act-index-refresh",
+      name: "Refresh the EU legislation metadata index",
+      callback: () => {
+        void this.refreshEuActIndex();
+      },
+    });
+
+    void this.refreshEuActIndexIfStale();
+  }
+
+  private createIndexProvider(): LawLookupModalIndexProvider {
+    return { getEuActIndex: () => this.euActIndex };
+  }
+
+  private async loadEuActIndexFromData(): Promise<EuActIndex | null> {
+    const stored = (await this.loadData() as DeLawPluginData | null)?.euActIndex ?? null;
+    if (!stored) return null;
+    try {
+      return parseStoredEuActIndex(stored);
+    } catch {
+      return null;
+    }
+  }
+
+  private createEuActIndexStorage(): RawEuActIndexStorage {
+    return {
+      loadRaw: async () => {
+        const data = (await this.loadData()) as DeLawPluginData | null;
+        return data?.euActIndex ?? null;
+      },
+      loadCandidateRaw: async () => {
+        const data = (await this.loadData()) as DeLawPluginData | null;
+        return data?.euActIndexCandidate ?? null;
+      },
+      saveCandidateRaw: async (raw) => {
+        const data = ((await this.loadData()) as DeLawPluginData | null) ?? {};
+        await this.saveData({ ...data, euActIndexCandidate: raw });
+      },
+      activateRaw: async (raw) => {
+        const data = ((await this.loadData()) as DeLawPluginData | null) ?? {};
+        await this.saveData({ ...data, euActIndex: raw, euActIndexCandidate: undefined });
+      },
+      discardCandidate: async () => {
+        const data = (await this.loadData()) as DeLawPluginData | null;
+        if (!data?.euActIndexCandidate) return;
+        const rest = { ...data };
+        delete rest.euActIndexCandidate;
+        await this.saveData(rest);
+      },
+    };
+  }
+
+  private createCellarTransport(): CellarMetadataTransport {
+    return {
+      fetchSparqlJson: createCellarSparqlJsonFetcher(requestUrl),
+      fetchWorkRdf: async (celex: string) => {
+        const response = await requestUrl({
+          url: `https://publications.europa.eu/resource/celex/${celex}`,
+          method: "GET",
+          headers: { Accept: CELLAR_WORK_RDF_ACCEPT },
+        });
+        return response.text;
+      },
+    };
+  }
+
+  private async refreshEuActIndex(): Promise<void> {
+    const client = new CellarMetadataClient(this.createCellarTransport());
+    const storage = this.createEuActIndexStorage();
+    try {
+      const index = this.euActIndex
+        ? await reconcileEuActIndex(client, storage)
+        : await bootstrapEuActIndex(client, storage);
+      this.euActIndex = index;
+      this.rebuildProviderRegistry();
+    } catch {
+      // Preserve last-known-good index; direct CELEX lookup still works.
+    }
+  }
+
+  private async refreshEuActIndexIfStale(): Promise<void> {
+    if (this.euActIndex && isIndexFresh(this.euActIndex, EU_ACT_INDEX_FRESHNESS_MS)) return;
+    await this.refreshEuActIndex();
   }
 
   getSettings(): DeLawPluginSettings {
@@ -109,10 +221,12 @@ export default class DeLawPlugin extends Plugin {
   }
 
   private rebuildProviderRegistry() {
+    const authorizer = createEuActIndexLanguageAuthorizer(this.euActIndex);
     const runtimeProviders = buildLawProviders({
       ...this.settings,
       httpTransport: createObsidianRequestUrlTransport(requestUrl),
       requestUrl,
+      euActLanguageAuthorizer: authorizer,
     });
     const cache = new StoredLawSectionCache(this.createLawSectionCacheStorage());
     this.providerRegistry = new ProviderRegistry(

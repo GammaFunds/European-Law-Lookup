@@ -1,6 +1,33 @@
-import { euLanguageToEliCode, isEuLawLanguage } from "../euLanguages";
-import type { EuDocumentType, EuLawLanguage } from "../types";
+import { resolveCellarLanguageCode } from "../euLanguages";
+import type { EuDocumentType } from "../types";
 import { euActForCelexReference, euActForLawCode, parseEuCelex } from "../euActRegistry";
+import { indexEntryForCelex, isEuActIndexEntryAvailableLanguage, type EuActIndex } from "../euActIndex";
+
+export class EuActLanguageExpressionUnavailableError extends Error {
+  constructor(readonly celex: string, readonly language: string) {
+    super(`Official EU language expression "${language}" is not available for CELEX ${celex}.`);
+    this.name = "EuActLanguageExpressionUnavailableError";
+  }
+}
+
+export type EuActLanguageAuthorization = "available" | "unavailable" | "unknown";
+
+export interface EuActLanguageAuthorizer {
+  authorize(celex: string, language: string): EuActLanguageAuthorization;
+}
+
+export function createEuActIndexLanguageAuthorizer(index: EuActIndex | null): EuActLanguageAuthorizer {
+  return {
+    authorize(celex: string, language: string): EuActLanguageAuthorization {
+      if (!index) return "unknown";
+      const canonical = resolveCellarLanguageCode(language);
+      if (canonical === null) return "unavailable";
+      const entry = indexEntryForCelex(index, celex);
+      if (!entry) return "unknown";
+      return isEuActIndexEntryAvailableLanguage(entry, canonical) ? "available" : "unknown";
+    },
+  };
+}
 
 export const EUR_LEX_DSGVO_CELEX = "32016R0679";
 export const EUR_LEX_DSGVO_ELI_PATH = "reg/2016/679/oj";
@@ -57,7 +84,7 @@ export function buildEurLexFetchRequest(reference: {
   url: string;
   headers: Record<string, string>;
 } | null {
-  if (!isEuLawLanguage(reference.language)) return null;
+  if (resolveCellarLanguageCode(reference.language) === null) return null;
   const identity = resolveEuCelexIdentity(reference);
   if (!identity) return null;
   return {
@@ -74,12 +101,13 @@ export function buildEurLexXhtmlFetchRequest(reference: {
   url: string;
   headers: Record<string, string>;
 } | null {
-  if (!isEuLawLanguage(reference.language) || !isCellarUuid(cellarUuid)) return null;
+  const eliCode = resolveCellarLanguageCode(reference.language);
+  if (eliCode === null || !isCellarUuid(cellarUuid)) return null;
   return {
     url: `${EUR_LEX_CELLAR_RESOURCE_BASE_URL}/${cellarUuid}`,
     headers: {
       Accept: "application/xhtml+xml",
-      "Accept-Language": euLanguageToEliCode(reference.language as EuLawLanguage),
+      "Accept-Language": eliCode,
       "Accept-Max-Cs-Size": "8388608",
     },
   };
@@ -98,7 +126,7 @@ export function canMapEurLexReference(reference: {
 }): boolean {
   return reference.jurisdiction === "EU"
     && reference.referenceType === "article"
-    && isEuLawLanguage(reference.language)
+    && resolveCellarLanguageCode(reference.language) !== null
     && resolveEuCelexIdentity(reference) !== null;
 }
 
@@ -114,10 +142,12 @@ export function buildEurLexSectionUrl(reference: {
   if (!identity) return null;
   const parsed = parseEuCelex(identity.celex);
   if (!parsed) return null;
+  const eliCode = resolveCellarLanguageCode(reference.language ?? "");
+  if (eliCode === null) return null;
   const eliType = parsed.documentType === "R"
     ? "reg"
     : parsed.documentType === "L"
       ? "dir"
       : "dec";
-  return `https://eur-lex.europa.eu/eli/${eliType}/${parsed.year}/${Number(parsed.number)}/oj/${euLanguageToEliCode(reference.language! as EuLawLanguage)}/html`;
+  return `https://eur-lex.europa.eu/eli/${eliType}/${parsed.year}/${Number(parsed.number)}/oj/${eliCode}/html`;
 }

@@ -43,6 +43,7 @@ export interface UiStrings {
   euTextLanguage: string;
   defaultEuTextLanguage: string;
   defaultEuTextLanguageDescription: string;
+  euLanguageExpressionUnavailable: string;
 }
 
 const UI_STRINGS: Record<UiLanguage, UiStrings> = {
@@ -94,6 +95,7 @@ const UI_STRINGS: Record<UiLanguage, UiStrings> = {
     euTextLanguage: "EU-Sprachfassung",
     defaultEuTextLanguage: "Standard-EU-Sprachfassung",
     defaultEuTextLanguageDescription: "Amtliche Sprachfassung für EUR-Lex-Abfragen.",
+    euLanguageExpressionUnavailable: "Diese amtliche EU-Sprachfassung ist für diesen Akt nicht verfügbar.",
   },
   en: {
     commandName: "Look up law",
@@ -143,6 +145,7 @@ const UI_STRINGS: Record<UiLanguage, UiStrings> = {
     euTextLanguage: "EU text language",
     defaultEuTextLanguage: "Default EU text language",
     defaultEuTextLanguageDescription: "Official language version used for EUR-Lex lookups.",
+    euLanguageExpressionUnavailable: "That official EU language expression is not available for this act.",
   },
 };
 

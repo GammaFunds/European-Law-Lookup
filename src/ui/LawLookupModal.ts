@@ -3,13 +3,22 @@ import { formatLawSectionAsMarkdown } from "../law/CitationFormatter";
 import { LawTranslationUnavailableError } from "../law/errors";
 import { ProviderRegistry } from "../law/ProviderRegistry";
 import type { LawJurisdiction, LawSection, LawSourceVariant } from "../law/types";
-import { EU_LANGUAGES, defaultEuLawLanguage } from "../law/euLanguages";
+import { EU_LANGUAGES } from "../law/euLanguages";
 import type { EuLawLanguage } from "../law/types";
 import { parseLawReferenceWithSelectedJurisdiction } from "../parser";
 import { LookupSequence } from "./LookupSequence";
 import { insertMarkdownIntoMarkdownView } from "./editorInsertion";
 import type { UiStrings } from "./i18n";
 import { buildLawSectionPreviewModel } from "./lawSectionPreview";
+import {
+  EuActLanguageExpressionUnavailableError,
+} from "../law/providers/eurLexMapping";
+import { indexEntryForCelex, type EuActIndex, type EuActIndexEntry } from "../law/euActIndex";
+import {
+  cellarCodeToLegacyEuLawLanguage,
+  cellarLanguageNativeName,
+  legacyEuLawLanguageToCellarCode,
+} from "../law/euLanguages";
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
@@ -17,6 +26,10 @@ interface LawLookupModalSettingsStore {
   setDefaultEuLawLanguage(value: EuLawLanguage): Promise<void>;
   getShowInsertedSourceMetadata(): boolean;
   setShowInsertedSourceMetadata(value: boolean): Promise<void>;
+}
+
+export interface LawLookupModalIndexProvider {
+  getEuActIndex(): EuActIndex | null;
 }
 
 export class LawLookupModal extends Modal {
@@ -28,6 +41,7 @@ export class LawLookupModal extends Modal {
   private selectedSourceVariant: LawSourceVariant = "official-de";
   private selectedJurisdiction: LawJurisdiction = "DE";
   private selectedEuLanguage: EuLawLanguage = "de";
+  private selectedEuCellarLanguage: string = "deu";
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
 
@@ -36,6 +50,7 @@ export class LawLookupModal extends Modal {
     private readonly providerRegistry: ProviderRegistry,
     private readonly settingsStore: LawLookupModalSettingsStore,
     private readonly ui: UiStrings,
+    private readonly indexProvider: LawLookupModalIndexProvider = { getEuActIndex: () => null },
   ) {
     super(app);
   }
@@ -92,6 +107,7 @@ export class LawLookupModal extends Modal {
     this.actionsEl = contentEl.createDiv({ cls: "de-law-lookup-actions" });
     this.selectedSourceVariant = this.settingsStore.getDefaultLawSourceVariant();
     this.selectedEuLanguage = this.settingsStore.getDefaultEuLawLanguage();
+    this.selectedEuCellarLanguage = legacyEuLawLanguageToCellarCode(this.selectedEuLanguage);
     this.showInsertedSourceMetadata =
       this.settingsStore.getShowInsertedSourceMetadata();
     this.renderActions();
@@ -117,7 +133,7 @@ export class LawLookupModal extends Modal {
     }
 
     const parsed = this.selectedJurisdiction === "EU"
-      ? { ...parsedReference, language: this.selectedEuLanguage }
+      ? { ...parsedReference, language: this.selectedEuCellarLanguage }
       : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
@@ -141,9 +157,11 @@ export class LawLookupModal extends Modal {
       this.renderResultMessage(
         error instanceof LawTranslationUnavailableError
           ? this.ui.englishTranslationUnavailableForCitation
-          : error instanceof Error
-            ? error.message
-            : this.ui.noCitationFound,
+          : error instanceof EuActLanguageExpressionUnavailableError
+            ? this.ui.euLanguageExpressionUnavailable
+            : error instanceof Error
+              ? error.message
+              : this.ui.noCitationFound,
       );
     }
   }
@@ -152,11 +170,16 @@ export class LawLookupModal extends Modal {
     this.actionsEl.empty();
 
     if (this.selectedJurisdiction === "EU") {
+      const availableLanguages = this.availableEuLanguagesForCurrentReference();
       new Setting(this.actionsEl).setName(this.ui.euTextLanguage).addDropdown((dropdown) => {
-        for (const language of EU_LANGUAGES) dropdown.addOption(language.code, language.nativeName);
-        dropdown.setValue(this.selectedEuLanguage).onChange(async (value) => {
-          this.selectedEuLanguage = defaultEuLawLanguage(undefined, value);
-          await this.settingsStore.setDefaultEuLawLanguage(this.selectedEuLanguage);
+        for (const language of availableLanguages) dropdown.addOption(language.code, language.nativeName);
+        dropdown.setValue(this.selectedEuCellarLanguage).onChange(async (value) => {
+          this.selectedEuCellarLanguage = value;
+          const legacy = cellarCodeToLegacyEuLawLanguage(value);
+          if (legacy) {
+            this.selectedEuLanguage = legacy;
+            await this.settingsStore.setDefaultEuLawLanguage(legacy);
+          }
           if (this.inputEl?.value.trim()) void this.renderParsedReference();
         });
       });
@@ -259,5 +282,20 @@ export class LawLookupModal extends Modal {
       cls: "de-law-lookup-result-message",
       text: message,
     });
+  }
+
+  private availableEuLanguagesForCurrentReference(): Array<{ code: string; nativeName: string }> {
+    const parsed = parseLawReferenceWithSelectedJurisdiction(this.inputEl?.value ?? "", "EU");
+    const celex = parsed?.euCelex;
+    const index = this.indexProvider.getEuActIndex();
+    if (celex && index) {
+      const entry: EuActIndexEntry | null = indexEntryForCelex(index, celex);
+      if (entry && entry.availableLanguages.length > 0) {
+        const known = entry.availableLanguages
+          .map((code) => ({ code, nativeName: cellarLanguageNativeName(code) ?? code }));
+        if (known.length > 0) return known;
+      }
+    }
+    return EU_LANGUAGES.map((language) => ({ code: language.eliCode, nativeName: language.nativeName }));
   }
 }

@@ -15,7 +15,7 @@ export interface ParsedEuCelex {
   number: string;
 }
 
-const EU_ACT_CELEX_PATTERN = /^3(\d{4})([RLD])(\d{4})$/;
+const EU_ACT_CELEX_PATTERN = /^3(\d{4})([RLD])(\d{4,6})$/;
 
 const EU_ACTS: readonly EuActEntry[] = [
   {

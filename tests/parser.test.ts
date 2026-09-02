@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { parseLawReference } from "../src/parser";
+import { parseLawReference, parseLawReferenceWithSelectedJurisdiction } from "../src/parser";
 
 describe("parseLawReference", () => {
   it("parses GG article-first references", () => {
@@ -56,6 +56,17 @@ describe("parseLawReference", () => {
       lawCode: "GG",
       section: "1",
       referenceType: "article",
+    });
+  });
+
+  it("parses direct six-digit EU CELEX article references", () => {
+    assert.deepEqual(parseLawReferenceWithSelectedJurisdiction("Art. 1 CELEX 32016R123456", "EU"), {
+      lawCode: "32016R123456",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "EU",
+      euCelex: "32016R123456",
+      euDocumentType: "R",
     });
   });
 

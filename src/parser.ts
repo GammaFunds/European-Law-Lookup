@@ -271,7 +271,7 @@ export function parseLawReferenceWithSelectedJurisdiction(
 }
 
 function parseEuCelexArticle(input: string): ParsedLawReference | null {
-  const celexPattern = String.raw`(?:CELEX\s*[:]?\s*)?(3\d{4}[RLD]\d{4})`;
+  const celexPattern = String.raw`(?:CELEX\s*[:]?\s*)?(3\d{4}[RLD]\d{4,6})`;
   const celexFirst = new RegExp(`^${celexPattern}\\s+${articleMarkerPattern}\\s*(${sectionPattern})$`, "iu").exec(input);
   const articleFirst = new RegExp(`^${articleMarkerPattern}\\s*(${sectionPattern})\\s+${celexPattern}$`, "iu").exec(input);
   const match = celexFirst ?? articleFirst;

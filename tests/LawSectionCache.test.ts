@@ -7,6 +7,9 @@ import {
   StoredLawSectionCache,
   lawSectionCacheKey,
 } from "../src/law/LawSectionCache";
+import {
+  euLanguageCacheToken,
+} from "../src/law/euLanguages";
 import { buildCachedLawProviders } from "../src/law/cachedProviderComposition";
 import { LawProviderUnavailableError } from "../src/law/errors";
 import type { LawReference, LawSection } from "../src/law/types";
@@ -230,7 +233,7 @@ describe("lawSectionCacheKey", () => {
     assert.equal(lawSectionCacheKey({ ...base, euCelex: "MALFORMED" }), null);
     assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R" }), null);
     assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R067" }), null);
-    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R06789" }), null);
+    assert.equal(lawSectionCacheKey({ ...base, euCelex: "32016R0678901" }), null);
   });
 
   it("returns null for non-sector-3 EU CELEX", () => {
@@ -289,6 +292,58 @@ describe("lawSectionCacheKey", () => {
     const ref = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "02016R0679" };
     await cache.set(section({ ...ref, text: "Test" }));
     assert.equal((await cache.get(ref))?.text, undefined);
+  });
+});
+
+describe("F4 euLanguageCacheToken fail-closed isolation", () => {
+  it("RED 1: invalid explicit token does not collapse to de", () => {
+    assert.notEqual(euLanguageCacheToken("xx"), "de");
+    assert.equal(euLanguageCacheToken("xx"), null);
+  });
+
+  it("RED 1b: long invalid token fails closed", () => {
+    assert.equal(euLanguageCacheToken("invalid"), null);
+  });
+
+  it("RED 2: invalid EU cache key fails closed", () => {
+    const ref = { lawCode: "DSGVO", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "xx" as const, euCelex: "32016R0679" };
+    assert.equal(lawSectionCacheKey(ref), null);
+  });
+
+  it("RED 3: invalid language cannot read cached German section", async () => {
+    const deRef = { lawCode: "DSGVO", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    const xxRef = { ...deRef, language: "xx" as const };
+    const cache = new InMemoryLawSectionCache();
+    await cache.set(section({ ...deRef, text: "Deutsch" }));
+    assert.equal((await cache.get(xxRef))?.text, undefined);
+    assert.equal((await cache.get(deRef))?.text, "Deutsch");
+  });
+
+  it("RED 4: no usable EU cache entry is created for invalid language", async () => {
+    const deRef = { lawCode: "DSGVO", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" };
+    const xxRef = { ...deRef, language: "xx" as const };
+    const cache = new InMemoryLawSectionCache();
+    await cache.set(section({ ...xxRef, text: "Invalid" }));
+    assert.equal((await cache.get(deRef))?.text, undefined);
+    assert.equal((await cache.get(xxRef))?.text, undefined);
+  });
+
+  it("positive control: existing intentional identities remain valid", () => {
+    assert.equal(euLanguageCacheToken(undefined), "de");
+    assert.equal(euLanguageCacheToken("de"), "de");
+    assert.equal(euLanguageCacheToken("deu"), "de");
+    assert.equal(euLanguageCacheToken("fra"), "fr");
+    assert.equal(euLanguageCacheToken("xyz"), "xyz");
+  });
+
+  it("positive control: distinct valid identities remain isolated", () => {
+    const base = { lawCode: "DSGVO", section: "1", referenceType: "article" as const, jurisdiction: "EU" as const, euCelex: "32016R0679" };
+    const deKey = lawSectionCacheKey({ ...base, language: "de" as const });
+    const frKey = lawSectionCacheKey({ ...base, language: "fra" as const });
+    const xyzKey = lawSectionCacheKey({ ...base, language: "xyz" as const });
+    assert.notEqual(deKey, frKey);
+    assert.notEqual(deKey, xyzKey);
+    assert.notEqual(frKey, xyzKey);
   });
 });
 

@@ -1,6 +1,6 @@
 import { formatReferenceLabel } from "./referenceLabel";
 import type { LawSection } from "./types";
-import { euLanguageNativeName } from "./euLanguages";
+import { cellarLanguageNativeName } from "./euLanguages";
 
 interface CitationFormatterOptions {
   includeMetadataFooter?: boolean;
@@ -30,7 +30,10 @@ export function formatLawSectionAsMarkdown(
   }
 
   if (section.jurisdiction === "EU" && section.language) {
-    lines.push("", `Amtliche EU-Sprachfassung: ${euLanguageNativeName(section.language)}.`);
+    const nativeName = cellarLanguageNativeName(section.language);
+    if (nativeName) {
+      lines.push("", `Amtliche EU-Sprachfassung: ${nativeName}.`);
+    }
   }
 
   if (section.jurisdiction === "EU" && section.euCelex) {

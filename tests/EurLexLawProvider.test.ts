@@ -9,6 +9,7 @@ import {
   EUR_LEX_DSGVO_CELLAR_URL,
   EUR_LEX_AIACT_CELLAR_URL,
   EUR_LEX_DATA_ACT_CELLAR_URL,
+  EuActLanguageExpressionUnavailableError,
   resolveEuCelexIdentity,
 } from "../src/law/providers/eurLexMapping";
 import { EurLexLawProvider } from "../src/law/providers/EurLexLawProvider";
@@ -780,5 +781,77 @@ describe("EurLexLawProvider", () => {
     const result = await resultForNotice(`\n  <?xml version="1.0"?>\n  ${noticeBodyWithoutDeclaration}`);
     assert.ok(result.section);
     assert.equal(result.calls, 2);
+  });
+});
+
+describe("F5 authoritative requested-language XHTML absence", () => {
+  function noticeThenStatusProvider(noticeStatus: number, xhtmlStatus: number, xhtmlBody = html) {
+    return new EurLexLawProvider(async (url, options) => {
+      const isNotice = url.includes("/resource/celex/");
+      return {
+        ok: isNotice ? noticeStatus >= 200 && noticeStatus < 300 : xhtmlStatus >= 200 && xhtmlStatus < 300,
+        status: isNotice ? noticeStatus : xhtmlStatus,
+        text: async () => isNotice ? identifierNotice("32016R0679") : xhtmlBody,
+        json: async () => options,
+      };
+    });
+  }
+
+  it("RED->GREEN: authoritative XHTML 404 throws EuActLanguageExpressionUnavailableError", async () => {
+    const provider = noticeThenStatusProvider(200, 404);
+    await assert.rejects(
+      () => provider.getSection({ ...reference, language: "ga" }),
+      (error: unknown) =>
+        error instanceof EuActLanguageExpressionUnavailableError
+        && error.celex === "32016R0679"
+        && error.language === "ga",
+    );
+  });
+
+  it("RED anchor: pre-fix code collapsed the same 404 to generic null", async () => {
+    // Documents the boundary that the corrected code must no longer satisfy:
+    // the act-level notice was valid, so the language expression is absent.
+    const provider = noticeThenStatusProvider(200, 404);
+    let threw = false;
+    try {
+      await provider.getSection({ ...reference, language: "ga" });
+    } catch (error) {
+      threw = error instanceof EuActLanguageExpressionUnavailableError;
+    }
+    assert.equal(threw, true, "language-absent XHTML 404 must throw, not return null");
+  });
+
+  it("keeps act-level notice 404 as generic not-found (no language error)", async () => {
+    const provider = noticeThenStatusProvider(404, 404);
+    assert.equal(await provider.getSection(reference), null);
+  });
+
+  it("does not attempt an alternate-language fetch on authoritative absence", async () => {
+    const requests: string[] = [];
+    const provider = new EurLexLawProvider(async (url, options) => {
+      requests.push(url);
+      const isNotice = url.includes("/resource/celex/");
+      return {
+        ok: isNotice,
+        status: isNotice ? 200 : 404,
+        text: async () => isNotice ? identifierNotice("32016R0679") : "",
+        json: async () => options,
+      };
+    });
+    await assert.rejects(() => provider.getSection({ ...reference, language: "ga" }), EuActLanguageExpressionUnavailableError);
+    assert.equal(requests.length, 2);
+    assert.match(requests[1], /resource\/cellar\//);
+  });
+
+  it("successful language XHTML with a missing article remains generic not-found", async () => {
+    const missingArticleHtml = `<!doctype html><html><head><meta name="celex" content="32016R0679"></head><body><h1 class="oj-doc-ti">Title</h1><div id="art_99"><p>Other article.</p></div></body></html>`;
+    const section = await noticeThenStatusProvider(200, 200, missingArticleHtml).getSection(reference);
+    assert.equal(section, null);
+  });
+
+  it("successful language XHTML with present article still resolves (F1-F4 preserved)", async () => {
+    const section = await noticeThenStatusProvider(200, 200).getSection(reference);
+    assert.ok(section);
+    assert.equal(section!.language, "de");
   });
 });
