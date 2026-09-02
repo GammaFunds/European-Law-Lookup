@@ -2,6 +2,24 @@
 
 All notable changes to Law Lookup for Germany + Austria + Switzerland are documented in this file.
 
+## [0.3.0] - 2026-09-02
+
+### Added
+
+- Generic CELEX support for original, unsuffixed sector-3 R (regulation), L (directive), and D (decision) acts, resolved directly from the official CELEX identifier without curated per-act mappings.
+- A self-updating local CELLAR act index that discovers newly published supported EU acts independently of plugin releases.
+- The CELLAR Identifier Notice as the legal-identity authority for each resolved EU act.
+- Dynamic handling of official EU publication languages for generic acts, without silent fallback to other languages and without machine translation.
+- AI Act and Data Act support through the same generic EU act architecture.
+
+### Scope and safety
+
+- The local act index is advisory only and is not a legal authority; the Identifier Notice remains the authority for an act's legal identity.
+- Unsupported CELEX classes remain rejected.
+- Consolidated versions, corrigenda, recitals, annexes, treaties, case law, and preparatory acts are not silently admitted.
+- The plugin never generates translations.
+- Requested languages are not rewritten by stale index metadata.
+
 ## [0.2.2] - 2026-07-17
 
 ### Fixed

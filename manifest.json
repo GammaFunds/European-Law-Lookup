@@ -1,7 +1,7 @@
 {
   "id": "german-law-lookup",
   "name": "Law Lookup for Germany + Austria + Switzerland",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "minAppVersion": "1.8.0",
   "description": "Look up selected German, Austrian, and Swiss laws plus multilingual GDPR articles, then insert formatted legal text into your notes.",
   "author": "GammaFunds",

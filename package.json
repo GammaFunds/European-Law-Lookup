@@ -1,6 +1,6 @@
 {
   "name": "german-law-lookup",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Look up selected German, Austrian, and Swiss laws plus multilingual GDPR articles, then insert formatted legal text into your notes.",
   "main": "main.js",
   "scripts": {
