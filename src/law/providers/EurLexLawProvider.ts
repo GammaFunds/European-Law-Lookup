@@ -367,7 +367,56 @@ function skipWhitespace(tokens: NoticeToken[], position: number): number {
 }
 
 function hasIdentifierType(token: NoticeToken | undefined): boolean {
-  return token?.kind === "open" && token.name === "NOTICE" && /^\s+type\s*=\s*(["'])identifier\1\s*$/.test(token.attributes);
+  if (token?.kind !== "open" || token.name !== "NOTICE") return false;
+
+  const attributes = parseNoticeRootAttributes(token.attributes);
+  return attributes?.type === "identifier";
+}
+
+function parseNoticeRootAttributes(value: string): { type: string } | null {
+  const attributes = new Set<string>();
+  const attributePattern = /([A-Za-z_:][A-Za-z0-9_.:-]*)[ \t\r\n]*=[ \t\r\n]*(["'])((?:[^<&]|&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9A-Fa-f]+);)*?)\2/y;
+  let position = 0;
+  let type: string | undefined;
+
+  while (position < value.length) {
+    if (attributes.size > 0) {
+      if (!/[ \t\r\n]/.test(value[position] ?? "")) return null;
+      while (/[ \t\r\n]/.test(value[position] ?? "")) position++;
+    } else {
+      while (/[ \t\r\n]/.test(value[position] ?? "")) position++;
+    }
+    if (position === value.length) break;
+
+    attributePattern.lastIndex = position;
+    const match = attributePattern.exec(value);
+    if (!match || attributes.has(match[1]) || !hasValidXml10CharacterReferences(match[3])) return null;
+    attributes.add(match[1]);
+    if (match[1] === "type") type = match[3];
+    else if (match[1] !== "embargo-date") return null;
+    position = attributePattern.lastIndex;
+  }
+
+  return type === undefined || attributes.size > 2 ? null : { type };
+}
+
+function hasValidXml10CharacterReferences(value: string): boolean {
+  for (const reference of value.match(/&#(?:x[0-9A-Fa-f]+|\d+);/g) ?? []) {
+    const number = reference.startsWith("&#x")
+      ? Number.parseInt(reference.slice(3, -1), 16)
+      : Number.parseInt(reference.slice(2, -1), 10);
+    if (!isValidXml10Character(number)) return false;
+  }
+  return true;
+}
+
+function isValidXml10Character(value: number): boolean {
+  return value === 0x9
+    || value === 0xa
+    || value === 0xd
+    || value >= 0x20 && value <= 0xd7ff
+    || value >= 0xe000 && value <= 0xfffd
+    || value >= 0x10000 && value <= 0x10ffff;
 }
 
 function isCellarValue(value: string | null): boolean {

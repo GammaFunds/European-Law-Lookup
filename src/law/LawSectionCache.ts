@@ -35,6 +35,11 @@ export function lawSectionCacheKey(reference: LawReference): string | null {
     return `EU:${celex}:${euSectionKey(reference)}:${languageToken}`;
   }
   const jurisdiction = reference.jurisdiction === "AT" ? "AT:" : reference.jurisdiction === "CH" ? "CH:" : "";
+  if (reference.jurisdiction === "CH") {
+    const language = reference.language ?? "de";
+    if (language !== "de" && language !== "fr" && language !== "it") return null;
+    return `${jurisdiction}${legacyLawSectionCacheKey(reference)}:official-${language}`;
+  }
   return `${jurisdiction}${legacyLawSectionCacheKey(reference)}:${normalizeLawSourceVariant(reference.sourceVariant)}`;
 }
 

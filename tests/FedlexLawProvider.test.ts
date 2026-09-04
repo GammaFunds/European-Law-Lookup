@@ -541,6 +541,7 @@ describe("Fedlex mapping helpers", () => {
     );
   });
 
+
   it("extracts article data from BV Art. 8 response", () => {
     const data = extractFedlexArticleFromResponse(bvArt8Fixture);
 
@@ -577,6 +578,7 @@ describe("Fedlex mapping helpers", () => {
       /Das Gesetz findet auf alle Rechtsfragen Anwendung/,
     );
   });
+
 
   it("returns null for empty hits response", () => {
     const data = extractFedlexArticleFromResponse(emptyHitsFixture);
@@ -954,6 +956,88 @@ describe("Fedlex mapping helpers", () => {
 });
 
 describe("FedlexLawProvider", () => {
+  it("returns official French content and coherent CH language metadata", async () => {
+    const provider = new FedlexLawProvider(
+      "https://www.fedlex.admin.ch",
+      async (_url, body) => {
+        assert.match(body, /frContent/);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => "",
+          json: async () => ({ hits: { hits: [{ inner_hits: { frContent: { hits: { hits: [{ _source: {
+            id: "art_1",
+            title: "<p>Application du droit</p>",
+            content: "<p>La loi s'applique à toutes les questions juridiques.</p>",
+          } }] } } } }] } }),
+        };
+      },
+    );
+
+    const section = await provider.getSection({
+      lawCode: "ZGB",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "CH",
+      language: "fr",
+    });
+
+    assert.notEqual(section, null);
+    assert.equal(section!.language, "fr");
+    assert.equal(section!.section, "1");
+    assert.match(section!.text, /La loi s'applique/);
+  });
+
+  it("returns official Italian content and coherent CH language metadata", async () => {
+    const provider = new FedlexLawProvider(
+      "https://www.fedlex.admin.ch",
+      async (_url, body) => {
+        assert.match(body, /itContent/);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => "",
+          json: async () => ({ hits: { hits: [{ inner_hits: { itContent: { hits: { hits: [{ _source: {
+            id: "art_1",
+            title: "<p>Applicazione del diritto</p>",
+            content: "<p>La legge si applica a tutte le questioni giuridiche.</p>",
+          } }] } } } }] } }),
+        };
+      },
+    );
+
+    const section = await provider.getSection({
+      lawCode: "ZGB",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "CH",
+      language: "it",
+    });
+
+    assert.notEqual(section, null);
+    assert.equal(section!.language, "it");
+    assert.equal(section!.section, "1");
+    assert.match(section!.text, /La legge si applica/);
+  });
+
+  it("fails closed for an unsupported explicit CH language", async () => {
+    let calls = 0;
+    const provider = new FedlexLawProvider("https://www.fedlex.admin.ch", async () => {
+      calls++;
+      return { ok: true, status: 200, text: async () => "", json: async () => ({}) };
+    });
+
+    const section = await provider.getSection({
+      lawCode: "ZGB",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "CH",
+      language: "es",
+    });
+
+    assert.equal(section, null);
+    assert.equal(calls, 0);
+  });
   it("resolves CH BV Art. 8 through fixture-backed fetch", async () => {
     const provider = new FedlexLawProvider(
       "https://www.fedlex.admin.ch",

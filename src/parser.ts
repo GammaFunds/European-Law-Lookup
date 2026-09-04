@@ -1,10 +1,12 @@
 import type { LawJurisdiction, LawReference } from "./law/types";
+import type { EuActIndex } from "./law/euActIndex";
 import {
   EU_ACT_ALIASES,
   euActForCelexReference,
   euActForLawCode,
   parseEuCelex,
 } from "./law/euActRegistry";
+import { resolveEuHumanCitation } from "./law/euHumanCitation";
 
 export type ParsedLawReference = LawReference;
 
@@ -189,6 +191,7 @@ export function enrichJurisdiction(
 export function parseLawReferenceWithSelectedJurisdiction(
   input: string,
   selectedJurisdiction: LawJurisdiction,
+  index?: EuActIndex | null,
 ): ParsedLawReference | null {
   if (selectedJurisdiction === "EU") {
     const normalized = input.trim().replace(/\s+/g, " ");
@@ -201,6 +204,8 @@ export function parseLawReferenceWithSelectedJurisdiction(
         return { lawCode: act.canonicalLawCode, section: euArticle[2] ?? euArticle[3], referenceType: "article", jurisdiction: "EU", euCelex: act.celex, euDocumentType: act.documentType };
       }
     }
+    const humanCitation = resolveEuHumanCitation(normalized, index ?? null);
+    if (humanCitation) return humanCitation;
   }
   const parsedReference = parseLawReference(input);
   if (parsedReference) {

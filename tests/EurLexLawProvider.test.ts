@@ -635,6 +635,173 @@ describe("EurLexLawProvider", () => {
     assert.equal(result.calls, 2);
   });
 
+  it("accepts the official 2011 identifier NOTICE with an embargo date", async () => {
+    const notice = `<?xml version="1.0" encoding="UTF-8"?>
+<NOTICE embargo-date="2011-07-01T00:00:00.000+02:00" type="identifier">
+  <URI>
+    <VALUE>http://publications.europa.eu/resource/cellar/d75d4591-19f4-470f-a1ba-6833902d0d76</VALUE>
+    <TYPE>cellar</TYPE>
+    <IDENTIFIER>d75d4591-19f4-470f-a1ba-6833902d0d76</IDENTIFIER>
+  </URI>
+  <SAMEAS>
+    <URI>
+      <VALUE>http://publications.europa.eu/resource/oj/JOL_2011_174_R_0001_01</VALUE>
+      <TYPE>oj</TYPE>
+      <IDENTIFIER>JOL_2011_174_R_0001_01</IDENTIFIER>
+    </URI>
+  </SAMEAS>
+  <SAMEAS>
+    <URI>
+      <VALUE>http://publications.europa.eu/resource/celex/32011L0061</VALUE>
+      <TYPE>celex</TYPE>
+      <IDENTIFIER>32011L0061</IDENTIFIER>
+    </URI>
+  </SAMEAS>
+  <SAMEAS>
+    <URI>
+      <VALUE>http://publications.europa.eu/resource/eli/dir/2011/61/oj</VALUE>
+      <TYPE>eli</TYPE>
+      <IDENTIFIER>dir:2011:61:oj</IDENTIFIER>
+    </URI>
+  </SAMEAS>
+</NOTICE>`;
+    const articleHtml = "<!doctype html><html><body><div id=\"art_1\"><p>Article 1 text.</p></div></body></html>";
+    let calls = 0;
+    const section = await new EurLexLawProvider(async (_url, options) => {
+      calls++;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => calls === 1 ? notice : articleHtml,
+        json: async () => options,
+      };
+    }).getSection({ ...reference, lawCode: "32011L0061", euCelex: "32011L0061", section: "1" });
+
+    assert.equal(calls, 2);
+    assert.ok(section);
+    assert.equal(section!.euCelex, "32011L0061");
+    assert.equal(section!.section, "1");
+  });
+
+  it("accepts embargo-date in either NOTICE attribute order", async () => {
+    for (const root of [
+      '<NOTICE embargo-date="2011-07-01T00:00:00.000+02:00" type="identifier">',
+      '<NOTICE type="identifier" embargo-date="2011-07-01T00:00:00.000+02:00">',
+      '<NOTICE type="identifier" embargo-date="x&amp;y">',
+    ]) {
+      const result = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', root));
+      assert.ok(result.section);
+      assert.equal(result.calls, 2);
+    }
+  });
+
+  it("rejects NOTICE attributes without separating whitespace", async () => {
+    const result = await resultForNotice(validNoticeBody().replace(
+      '<NOTICE type="identifier">',
+      '<NOTICE type="identifier"embargo-date="x">',
+    ));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("rejects a raw ampersand in a NOTICE attribute value", async () => {
+    const result = await resultForNotice(validNoticeBody().replace(
+      '<NOTICE type="identifier">',
+      '<NOTICE type="identifier" embargo-date="x&y">',
+    ));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("rejects an XML NUL character reference in a NOTICE attribute value", async () => {
+    const result = await resultForNotice(validNoticeBody().replace(
+      '<NOTICE type="identifier">',
+      '<NOTICE type="identifier" embargo-date="&#0;">',
+    ));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("rejects an XML surrogate character reference in a NOTICE attribute value", async () => {
+    const result = await resultForNotice(validNoticeBody().replace(
+      '<NOTICE type="identifier">',
+      '<NOTICE type="identifier" embargo-date="&#xD800;">',
+    ));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("rejects an out-of-range XML character reference in a NOTICE attribute value", async () => {
+    const result = await resultForNotice(validNoticeBody().replace(
+      '<NOTICE type="identifier">',
+      '<NOTICE type="identifier" embargo-date="&#x110000;">',
+    ));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("accepts valid XML numeric character references in a NOTICE attribute value", async () => {
+    for (const root of [
+      '<NOTICE type="identifier" embargo-date="&#38;">',
+      '<NOTICE type="identifier" embargo-date="&#x26;">',
+    ]) {
+      const result = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', root));
+      assert.ok(result.section);
+      assert.equal(result.calls, 2);
+    }
+  });
+
+  it("accepts numeric references at the XML 1.0 character boundaries", async () => {
+    for (const reference of ["&#9;", "&#xA;", "&#13;", "&#x20;", "&#xD7FF;", "&#xE000;", "&#xFFFD;", "&#x10000;", "&#x10FFFF;"]) {
+      const result = await resultForNotice(validNoticeBody().replace(
+        '<NOTICE type="identifier">',
+        `<NOTICE type="identifier" embargo-date="${reference}">`,
+      ));
+      assert.ok(result.section);
+      assert.equal(result.calls, 2);
+    }
+  });
+
+  it("preserves rejection of malformed named and bare entity references", async () => {
+    for (const root of [
+      '<NOTICE type="identifier" embargo-date="&unknown;">',
+      '<NOTICE type="identifier" embargo-date="&">',
+    ]) {
+      const result = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', root));
+      assert.equal(result.section, null);
+      assert.equal(result.calls, 1);
+    }
+  });
+
+  it("rejects an unknown NOTICE root attribute", async () => {
+    const result = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', '<NOTICE type="identifier" unexpected="x">'));
+    assert.equal(result.section, null);
+    assert.equal(result.calls, 1);
+  });
+
+  it("requires exactly the identifier NOTICE type", async () => {
+    const missingType = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', "<NOTICE embargo-date=\"2011-07-01T00:00:00.000+02:00\">") );
+    assert.equal(missingType.section, null);
+    assert.equal(missingType.calls, 1);
+
+    const wrongType = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', '<NOTICE type="object">'));
+    assert.equal(wrongType.section, null);
+    assert.equal(wrongType.calls, 1);
+  });
+
+  it("rejects duplicate or incompletely consumed NOTICE root attributes", async () => {
+    for (const root of [
+      '<NOTICE type="identifier" type="identifier">',
+      '<NOTICE type="identifier" embargo-date="x" embargo-date="y">',
+      '<NOTICE type="identifier" embargo-date="x>',
+      '<NOTICE type="identifier" embargo-date="x" trailing',
+    ]) {
+      const result = await resultForNotice(validNoticeBody().replace('<NOTICE type="identifier">', root));
+      assert.equal(result.section, null);
+      assert.equal(result.calls, 1);
+    }
+  });
+
   it("accepts real-style XHTML without CELEX or ELI markers", async () => {
     const result = await resultForNotice(validNoticeBody());
     assert.ok(result.section);

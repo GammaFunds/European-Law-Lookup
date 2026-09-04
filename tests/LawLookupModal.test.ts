@@ -374,6 +374,99 @@ describe("LawLookupModal EU requested language preservation", () => {
   });
 });
 
+describe("LawLookupModal CH official language selection", () => {
+  it("sends the selected Swiss language to Fedlex and persists it", async () => {
+    FakeSetting.instances = [];
+    const requests: CapturedRequest[] = [];
+    let persisted: string | undefined;
+    const providerRegistry = {
+      getSection: async (reference: LawReference): Promise<never> => {
+        requests.push({ language: reference.language });
+        throw new Error("probe-provider-unavailable");
+      },
+    };
+    const settingsStore = {
+      getDefaultLawSourceVariant: () => "official-de",
+      getDefaultEuLawLanguage: () => "de" as EuLawLanguage,
+      setDefaultEuLawLanguage: async (_value: EuLawLanguage): Promise<void> => {},
+      getDefaultChLawLanguage: () => "de" as const,
+      setDefaultChLawLanguage: async (value: "de" | "fr" | "it"): Promise<void> => { persisted = value; },
+      getShowInsertedSourceMetadata: () => true,
+      setShowInsertedSourceMetadata: async (_value: boolean): Promise<void> => {},
+    };
+    const modal = new LawLookupModal(
+      {} as App,
+      providerRegistry as unknown as ProviderRegistry,
+      settingsStore,
+      getUiStrings("en"),
+      { getEuActIndex: () => null },
+    );
+    modal.onOpen();
+    const contentEl = (modal as unknown as { contentEl: FakeElement }).contentEl;
+    const formEl = contentEl.children[1];
+    const inputEl = formEl.children[0];
+    const jurisdictionSelect = formEl.children[1];
+    jurisdictionSelect.value = "CH";
+    jurisdictionSelect.fire("change");
+    await languageDropdown().select("fr");
+    inputEl.value = "Art. 1 ZGB";
+    inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+
+    assert.equal(persisted, "fr");
+    assert.deepEqual(requests, [{ language: "fr" }]);
+  });
+
+  it("does not attach the selected Swiss language to explicit non-CH references", async () => {
+    FakeSetting.instances = [];
+    const requests: CapturedRequest[] = [];
+    const providerRegistry = {
+      getSection: async (reference: LawReference): Promise<never> => {
+        requests.push({ language: reference.language });
+        throw new Error("probe-provider-unavailable");
+      },
+    };
+    const settingsStore = {
+      getDefaultLawSourceVariant: () => "official-de",
+      getDefaultEuLawLanguage: () => "de" as EuLawLanguage,
+      setDefaultEuLawLanguage: async (_value: EuLawLanguage): Promise<void> => {},
+      getDefaultChLawLanguage: () => "de" as const,
+      setDefaultChLawLanguage: async (_value: "de" | "fr" | "it"): Promise<void> => {},
+      getShowInsertedSourceMetadata: () => true,
+      setShowInsertedSourceMetadata: async (_value: boolean): Promise<void> => {},
+    };
+    const modal = new LawLookupModal(
+      {} as App,
+      providerRegistry as unknown as ProviderRegistry,
+      settingsStore,
+      getUiStrings("en"),
+      { getEuActIndex: () => null },
+    );
+    modal.onOpen();
+    const contentEl = (modal as unknown as { contentEl: FakeElement }).contentEl;
+    const formEl = contentEl.children[1];
+    const inputEl = formEl.children[0];
+    const jurisdictionSelect = formEl.children[1];
+    jurisdictionSelect.value = "CH";
+    jurisdictionSelect.fire("change");
+    await languageDropdown().select("fr");
+    inputEl.value = "AT ABGB 1295";
+    inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+
+    assert.deepEqual(requests, [{ language: undefined }]);
+
+    jurisdictionSelect.value = "DE";
+    jurisdictionSelect.fire("change");
+    requests.length = 0;
+    inputEl.value = "Art. 1 GG";
+    inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+
+    assert.deepEqual(requests, [{ language: undefined }]);
+  });
+});
+
 describe("LawLookupModal test harness module-state isolation", () => {
   it("restores Module._resolveFilename to the exact original function after the harness lifecycle", () => {
     assert.equal(

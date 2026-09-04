@@ -19,11 +19,14 @@ import {
   cellarLanguageNativeName,
   legacyEuLawLanguageToCellarCode,
 } from "../law/euLanguages";
+import type { FedlexLanguage } from "../law/providers/fedlexMapping";
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
   getDefaultEuLawLanguage(): EuLawLanguage;
   setDefaultEuLawLanguage(value: EuLawLanguage): Promise<void>;
+  getDefaultChLawLanguage?(): FedlexLanguage;
+  setDefaultChLawLanguage?(value: FedlexLanguage): Promise<void>;
   getShowInsertedSourceMetadata(): boolean;
   setShowInsertedSourceMetadata(value: boolean): Promise<void>;
 }
@@ -42,6 +45,7 @@ export class LawLookupModal extends Modal {
   private selectedJurisdiction: LawJurisdiction = "DE";
   private selectedEuLanguage: EuLawLanguage = "de";
   private selectedEuCellarLanguage: string = "deu";
+  private selectedChLanguage: FedlexLanguage = "de";
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
 
@@ -108,6 +112,7 @@ export class LawLookupModal extends Modal {
     this.selectedSourceVariant = this.settingsStore.getDefaultLawSourceVariant();
     this.selectedEuLanguage = this.settingsStore.getDefaultEuLawLanguage();
     this.selectedEuCellarLanguage = legacyEuLawLanguageToCellarCode(this.selectedEuLanguage);
+    this.selectedChLanguage = this.settingsStore.getDefaultChLawLanguage?.() ?? "de";
     this.showInsertedSourceMetadata =
       this.settingsStore.getShowInsertedSourceMetadata();
     this.renderActions();
@@ -122,6 +127,7 @@ export class LawLookupModal extends Modal {
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
       this.inputEl.value,
       this.selectedJurisdiction,
+      this.indexProvider.getEuActIndex(),
     );
     this.currentSection = null;
     this.currentMarkdown = "";
@@ -134,7 +140,9 @@ export class LawLookupModal extends Modal {
 
     const parsed = this.selectedJurisdiction === "EU"
       ? { ...parsedReference, language: this.selectedEuCellarLanguage }
-      : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
+      : parsedReference.jurisdiction === "CH"
+        ? { ...parsedReference, language: this.selectedChLanguage }
+        : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
 
@@ -182,6 +190,18 @@ export class LawLookupModal extends Modal {
           }
           if (this.inputEl?.value.trim()) void this.renderParsedReference();
         });
+      });
+    } else if (this.selectedJurisdiction === "CH") {
+      new Setting(this.actionsEl).setName("Swiss official text language").addDropdown((dropdown) => {
+        dropdown.addOption("de", "Deutsch");
+        dropdown.addOption("fr", "Français");
+        dropdown.addOption("it", "Italiano");
+        dropdown.setValue(this.selectedChLanguage).onChange(async (value) => {
+            if (value !== "de" && value !== "fr" && value !== "it") return;
+            this.selectedChLanguage = value;
+            await this.settingsStore.setDefaultChLawLanguage?.(value);
+            if (this.inputEl?.value.trim()) void this.renderParsedReference();
+          });
       });
     } else {
       new Setting(this.actionsEl).setName(this.ui.useEnglishTranslationWhenAvailable).addToggle((toggle) => {
@@ -285,9 +305,9 @@ export class LawLookupModal extends Modal {
   }
 
   private availableEuLanguagesForCurrentReference(): Array<{ code: string; nativeName: string }> {
-    const parsed = parseLawReferenceWithSelectedJurisdiction(this.inputEl?.value ?? "", "EU");
-    const celex = parsed?.euCelex;
     const index = this.indexProvider.getEuActIndex();
+    const parsed = parseLawReferenceWithSelectedJurisdiction(this.inputEl?.value ?? "", "EU", index);
+    const celex = parsed?.euCelex;
     if (celex && index) {
       const entry: EuActIndexEntry | null = indexEntryForCelex(index, celex);
       if (entry && entry.availableLanguages.length > 0) {

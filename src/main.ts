@@ -19,6 +19,10 @@ import {
 import {
   getSupportedFedlexLaws,
 } from "./law/providers/fedlexMapping";
+import {
+  normalizeFedlexLanguage,
+  type FedlexLanguage,
+} from "./law/providers/fedlexMapping";
 import type { LawSection, LawSourceVariant } from "./law/types";
 import type { EuLawLanguage } from "./law/types";
 import { EU_LANGUAGES, defaultEuLawLanguage } from "./law/euLanguages";
@@ -62,6 +66,7 @@ interface DeLawPluginSettings {
   lawSectionCacheTtlDays: number | null;
   defaultLawSourceVariant: LawSourceVariant;
   defaultEuLawLanguage: EuLawLanguage;
+  defaultChLawLanguage: FedlexLanguage;
   showInsertedSourceMetadata: boolean;
 }
 
@@ -77,6 +82,7 @@ const DEFAULT_SETTINGS: DeLawPluginSettings = {
   lawSectionCacheTtlDays: null,
   defaultLawSourceVariant: "official-de",
   defaultEuLawLanguage: "de",
+  defaultChLawLanguage: "de",
   showInsertedSourceMetadata: true,
 };
 
@@ -105,6 +111,8 @@ export default class DeLawPlugin extends Plugin {
               this.settings.defaultLawSourceVariant,
             getDefaultEuLawLanguage: () => this.settings.defaultEuLawLanguage,
             setDefaultEuLawLanguage: async (value) => { await this.updateSettings({ defaultEuLawLanguage: value }); },
+            getDefaultChLawLanguage: () => this.settings.defaultChLawLanguage,
+            setDefaultChLawLanguage: async (value) => { await this.updateSettings({ defaultChLawLanguage: value }); },
             getShowInsertedSourceMetadata: () =>
               this.settings.showInsertedSourceMetadata,
             setShowInsertedSourceMetadata: async (value) => {
@@ -247,6 +255,7 @@ export default class DeLawPlugin extends Plugin {
         storedSettings?.defaultLawSourceVariant,
       ),
       defaultEuLawLanguage: defaultEuLawLanguage(safeGetObsidianLanguage(), storedSettings?.defaultEuLawLanguage),
+      defaultChLawLanguage: normalizeFedlexLanguage(storedSettings?.defaultChLawLanguage) ?? "de",
       showInsertedSourceMetadata:
         storedSettings?.showInsertedSourceMetadata !== false,
     };
@@ -443,97 +452,6 @@ class DeLawSettingsTab extends PluginSettingTab {
         }
       });
     });
-  }
-
-  getSettingDefinitions() {
-    const ui = this.plugin.getUiStrings();
-
-    return [
-      {
-        name: ui.enableLocalLawTextCache,
-        desc: ui.enableLocalLawTextCacheDescription,
-        render: (containerEl: HTMLElement) => {
-          new Setting(containerEl)
-            .setName(ui.enableLocalLawTextCache)
-            .setDesc(ui.enableLocalLawTextCacheDescription)
-            .addToggle((toggle) => {
-              toggle
-                .setValue(this.plugin.getSettings().enableLawSectionCache)
-                .onChange(async (value) => {
-                  await persistCacheToggleAndRefresh({
-                    enabled: value,
-                    target: this,
-                    updateSettings: async (patch) => {
-                      await this.plugin.updateSettings(patch);
-                    },
-                  });
-                });
-            });
-        },
-      },
-      {
-        name: ui.defaultEuTextLanguage,
-        desc: ui.defaultEuTextLanguageDescription,
-        render: (containerEl: HTMLElement) => {
-          new Setting(containerEl)
-            .setName(ui.defaultEuTextLanguage)
-            .setDesc(ui.defaultEuTextLanguageDescription)
-            .addDropdown((dropdown) => {
-              for (const language of EU_LANGUAGES) {
-                dropdown.addOption(language.code, language.nativeName);
-              }
-              dropdown
-                .setValue(this.plugin.getSettings().defaultEuLawLanguage)
-                .onChange(async (value) => {
-                  await this.plugin.updateSettings({
-                    defaultEuLawLanguage: defaultEuLawLanguage(undefined, value),
-                  });
-                });
-            });
-        },
-      },
-      {
-        name: ui.defaultLawTextSource,
-        render: (containerEl: HTMLElement) => {
-          new Setting(containerEl)
-            .setName(ui.defaultLawTextSource)
-            .addDropdown((dropdown) => {
-              dropdown
-                .addOption("official-de", ui.germanOfficialText)
-                .addOption("translation-en", ui.englishTranslationWhenAvailable)
-                .setValue(this.plugin.getSettings().defaultLawSourceVariant)
-                .onChange(async (value) => {
-                  await this.plugin.updateSettings({
-                    defaultLawSourceVariant:
-                      value === "translation-en" ? "translation-en" : "official-de",
-                  });
-                });
-            });
-        },
-      },
-      {
-        name: ui.cacheExpirationInDays,
-        desc: ui.cacheExpirationInDaysDescription,
-        render: (containerEl: HTMLElement) => {
-          const settings = this.plugin.getSettings();
-          new Setting(containerEl)
-            .setName(ui.cacheExpirationInDays)
-            .setDesc(ui.cacheExpirationInDaysDescription)
-            .addText((text) => {
-              text.inputEl.type = "number";
-              text
-                .setDisabled(!settings.enableLawSectionCache)
-                .setPlaceholder(ui.noExpirationPlaceholder)
-                .setValue(settings.lawSectionCacheTtlDays == null ? "" : String(settings.lawSectionCacheTtlDays))
-                .onChange(async (value) => {
-                  await this.plugin.updateSettings({
-                    lawSectionCacheTtlDays: normalizeTtlDays(value),
-                  });
-                });
-            });
-        },
-      },
-    ];
   }
 
   private renderSupportedLawsGroup(

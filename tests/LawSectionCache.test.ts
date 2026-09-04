@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import { resolve } from "node:path";
 import type { LawProvider } from "../src/law/LawProvider";
 import {
   CachedLawProvider,
@@ -14,6 +15,93 @@ import { buildCachedLawProviders } from "../src/law/cachedProviderComposition";
 import { LawProviderUnavailableError } from "../src/law/errors";
 import type { LawReference, LawSection } from "../src/law/types";
 import { persistCacheToggleAndRefresh } from "../src/settingsRefresh";
+
+class SettingsTestPlugin {
+  app = undefined;
+  settingTab: unknown;
+
+  async loadData() {
+    return null;
+  }
+
+  async saveData() {}
+
+  addSettingTab(tab: unknown) {
+    this.settingTab = tab;
+  }
+
+  addCommand() {}
+}
+
+class SettingsTestPluginSettingTab {
+  constructor(
+    public readonly app: unknown,
+    public readonly plugin: unknown,
+  ) {}
+}
+
+const settingsObsidianStubPath = "/tmp/opencode/obsidian-settings-stub.cjs";
+const settingsObsidianStub = {
+  Plugin: SettingsTestPlugin,
+  PluginSettingTab: SettingsTestPluginSettingTab,
+  Modal: class {},
+  Notice: class {},
+  MarkdownView: class {},
+  Setting: class {},
+  moment: { locale: () => "en" },
+  requestUrl: async () => {
+    throw new Error("settings test must not perform network I/O");
+  },
+};
+const SettingsNodeModule = require("node:module") as typeof import("node:module");
+const settingsModule = SettingsNodeModule as unknown as {
+  _resolveFilename?: (request: string, ...rest: unknown[]) => string;
+  _cache: Record<string, unknown>;
+};
+
+async function loadSettingsTabFromBundle(): Promise<unknown> {
+  const originalResolveFilename = settingsModule._resolveFilename;
+  const originalStubCacheEntry = settingsModule._cache[settingsObsidianStubPath];
+  const stubModule = new SettingsNodeModule(settingsObsidianStubPath);
+  stubModule.exports = settingsObsidianStub;
+  stubModule.loaded = true;
+  settingsModule._resolveFilename = function (request: string, ...rest: unknown[]) {
+    if (request === "obsidian") return settingsObsidianStubPath;
+    return originalResolveFilename
+      ? originalResolveFilename.call(this, request, ...rest)
+      : request;
+  };
+  settingsModule._cache[settingsObsidianStubPath] = stubModule;
+  try {
+    const bundle = require(resolve(__dirname, "../../main.js")) as {
+      default: new () => SettingsTestPlugin;
+    };
+    const plugin = new bundle.default();
+    await (plugin as SettingsTestPlugin & { onload(): Promise<void> }).onload();
+    return plugin.settingTab;
+  } finally {
+    settingsModule._resolveFilename = originalResolveFilename;
+    if (originalStubCacheEntry === undefined) {
+      delete settingsModule._cache[settingsObsidianStubPath];
+    } else {
+      settingsModule._cache[settingsObsidianStubPath] = originalStubCacheEntry;
+    }
+  }
+}
+
+describe("settings tab rendering", () => {
+  it("does not register an incomplete declarative settings surface", async () => {
+    const settingsTab = await loadSettingsTabFromBundle() as {
+      getSettingDefinitions?: () => unknown;
+    };
+
+    assert.equal(
+      settingsTab?.getSettingDefinitions,
+      undefined,
+      "the settings tab must use its complete imperative display() renderer",
+    );
+  });
+});
 
 describe("lawSectionCacheKey", () => {
   it("refreshes settings declaratively when available and falls back to display otherwise", async () => {
@@ -168,6 +256,17 @@ describe("lawSectionCacheKey", () => {
       lawSectionCacheKey({ lawCode: "BV", section: "8", referenceType: "article", jurisdiction: "CH" }),
       "CH:BV:art:8:official-de",
     );
+  });
+
+  it("isolates CH cache keys by official language", () => {
+    const base = { lawCode: "BV", section: "1", referenceType: "article" as const, jurisdiction: "CH" as const };
+    const de = lawSectionCacheKey({ ...base, language: "de" });
+    const fr = lawSectionCacheKey({ ...base, language: "fr" });
+    const it = lawSectionCacheKey({ ...base, language: "it" });
+
+    assert.notEqual(de, fr);
+    assert.notEqual(de, it);
+    assert.notEqual(fr, it);
   });
 
   it("distinguishes CH ZGB Art. 1 from unprefixed ZGB Art. 1", () => {

@@ -30,7 +30,11 @@ export class FedlexLawProvider implements LawProvider {
       return null;
     }
 
-    const queryBody = buildFedlexQueryBody(query.workUri, query.articleNumber);
+    const queryBody = buildFedlexQueryBody(
+      query.workUri,
+      query.articleNumber,
+      query.language,
+    );
     const searchUrl = `${this.baseUrl}/elasticsearch/proxy/_search?index=data`;
 
     let response: LawProviderHttpResponse;
@@ -51,7 +55,7 @@ export class FedlexLawProvider implements LawProvider {
       return null;
     }
 
-    const articleData = extractFedlexArticleFromResponse(responseJson);
+    const articleData = extractFedlexArticleFromResponse(responseJson, query.language);
     if (!articleData) {
       return null;
     }

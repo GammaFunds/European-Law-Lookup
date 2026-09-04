@@ -159,6 +159,15 @@ export function getSupportedFedlexLaws(): ReadonlyArray<SupportedFedlexLaw> {
 export interface FedlexMapResult {
   workUri: string;
   articleNumber: string;
+  language: FedlexLanguage;
+}
+
+export type FedlexLanguage = "de" | "fr" | "it";
+
+export function normalizeFedlexLanguage(language?: string): FedlexLanguage | null {
+  if (language === undefined || language === "de") return "de";
+  if (language === "fr" || language === "it") return language;
+  return null;
 }
 
 export function mapFedlexReference(
@@ -177,9 +186,13 @@ export function mapFedlexReference(
     return null;
   }
 
+  const language = normalizeFedlexLanguage(reference.language);
+  if (!language) return null;
+
   return {
     workUri: law.workUri,
     articleNumber: reference.section,
+    language,
   };
 }
 
@@ -194,7 +207,14 @@ export function normalizeArticleId(section: string): string {
 export function buildFedlexQueryBody(
   workUri: string,
   articleNumber: string,
+  language: string = "de",
 ): unknown {
+  const normalizedLanguage = normalizeFedlexLanguage(language);
+  if (!normalizedLanguage) {
+    throw new Error(`Unsupported Swiss law language: ${language}`);
+  }
+  const contentField = `${normalizedLanguage}Content`;
+  const contentIdField = `${contentField}.id.keyword`;
   return {
     query: {
       bool: {
@@ -202,10 +222,10 @@ export function buildFedlexQueryBody(
           { term: { "contentParent.keyword": workUri } },
           {
             nested: {
-              path: "deContent",
+              path: contentField,
               query: {
                 term: {
-                  "deContent.id.keyword": normalizeArticleId(articleNumber),
+                  [contentIdField]: normalizeArticleId(articleNumber),
                 },
               },
               inner_hits: { _source: true },
@@ -227,14 +247,17 @@ export interface FedlexArticleData {
 
 export function extractFedlexArticleFromResponse(
   responseJson: unknown,
+  language: string = "de",
 ): FedlexArticleData | null {
+  const normalizedLanguage = normalizeFedlexLanguage(language);
+  if (!normalizedLanguage) return null;
   const root = responseJson as FedlexSearchResponse;
   const outerHits = root?.hits?.hits;
   if (!outerHits || outerHits.length === 0) {
     return null;
   }
 
-  const inner = outerHits[0]?.inner_hits?.deContent?.hits?.hits;
+  const inner = outerHits[0]?.inner_hits?.[`${normalizedLanguage}Content`]?.hits?.hits;
   if (!inner || inner.length === 0) {
     return null;
   }
@@ -406,6 +429,7 @@ export function mapFedlexToLawSection(params: {
     referenceType: "article",
     sourceVariant: "official-de",
     jurisdiction: "CH",
+    language: normalizeFedlexLanguage(params.reference.language) ?? undefined,
     heading: normalizeFedlexHeading(params.articleData.title, params.reference.section),
     text: convertFedlexHtmlToText(params.articleData.content),
     retrievedAt: params.retrievedAt,
@@ -419,8 +443,7 @@ interface FedlexSearchResponse {
   hits?: {
     hits?: Array<{
       _source?: Record<string, unknown>;
-      inner_hits?: {
-        deContent?: {
+      inner_hits?: Record<string, {
           hits?: {
             hits?: Array<{
               _source?: {
@@ -432,8 +455,7 @@ interface FedlexSearchResponse {
               };
             }>;
           };
-        };
-      };
+        }>;
     }>;
   };
 }
