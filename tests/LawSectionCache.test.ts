@@ -30,10 +30,23 @@ class SettingsTestPlugin {
   settingTab: unknown;
 
   async loadData() {
-    return null;
+    return this.storedData;
   }
 
-  async saveData() {}
+  storedData: Record<string, unknown> = {
+    enableLawSectionCache: true,
+    lawSectionCacheTtlDays: null,
+    defaultEuLawLanguage: "de",
+    defaultLawSourceVariant: "official-de",
+    lawSectionCache: { sentinel: "cache" },
+    euActIndexStore: { sentinel: "index-authority" },
+  };
+  savedData: Record<string, unknown> | null = null;
+
+  async saveData(data: Record<string, unknown>) {
+    this.savedData = data;
+    this.storedData = data;
+  }
 
   addSettingTab(tab: unknown) {
     this.settingTab = tab;
@@ -99,16 +112,44 @@ async function loadSettingsTabFromBundle(): Promise<unknown> {
 }
 
 describe("settings tab rendering", () => {
-  it("does not register an incomplete declarative settings surface", async () => {
+  it("registers the complete declarative settings surface", async () => {
     const settingsTab = await loadSettingsTabFromBundle() as {
-      getSettingDefinitions?: () => unknown;
+      getSettingDefinitions: () => Array<Record<string, unknown>>;
+      getControlValue: (key: string) => unknown;
+      setControlValue: (key: string, value: unknown) => Promise<void>;
     };
 
-    assert.equal(
-      settingsTab?.getSettingDefinitions,
-      undefined,
-      "the settings tab must use its complete imperative display() renderer",
+    assert.equal(typeof settingsTab.getSettingDefinitions, "function");
+    const definitions = settingsTab.getSettingDefinitions();
+    assert.ok(definitions.length > 0);
+    const controls = definitions.filter((definition) => definition.control) as Array<{
+      control: { key?: string };
+      name: string;
+    }>;
+    assert.deepEqual(
+      controls.map((definition) => definition.control.key),
+      ["enableLawSectionCache", "defaultEuLawLanguage", "defaultLawSourceVariant", "lawSectionCacheTtlDays"],
     );
+    assert.ok(definitions.some((definition) => typeof definition.render === "function"));
+    assert.ok(definitions.every((definition) => typeof definition.name === "string" && definition.name.length > 0));
+    assert.equal(controls.some((definition) => definition.control.key === "enableMockLawProvider"), false);
+    assert.equal(controls.some((definition) => definition.control.key === "defaultChLawLanguage"), false);
+    assert.equal(typeof settingsTab.getControlValue, "function");
+    assert.equal(typeof settingsTab.setControlValue, "function");
+  });
+
+  it("persists declarative controls without clobbering plugin data", async () => {
+    const settingsTab = await loadSettingsTabFromBundle() as {
+      setControlValue: (key: string, value: unknown) => Promise<void>;
+      plugin: SettingsTestPlugin;
+    };
+
+    await settingsTab.setControlValue("defaultEuLawLanguage", "fr");
+    assert.equal(settingsTab.plugin.savedData?.defaultEuLawLanguage, "fr");
+    assert.deepEqual(settingsTab.plugin.savedData?.lawSectionCache, { sentinel: "cache" });
+    assert.deepEqual(settingsTab.plugin.savedData?.euActIndexStore, { sentinel: "index-authority" });
+    assert.equal(await settingsTab.setControlValue("internalOnly", "bad"), undefined);
+    assert.equal(settingsTab.plugin.savedData?.internalOnly, undefined);
   });
 });
 

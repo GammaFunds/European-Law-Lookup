@@ -58,7 +58,8 @@ class FakeElement {
 }
 
 class FakeSetting {
-  constructor(_container: FakeElement) {}
+  constructor(public readonly containerEl: FakeElement) {}
+  settingEl = this.containerEl;
   setName(): FakeSetting { return this; }
   setDesc(): FakeSetting { return this; }
   setHeading(): FakeSetting { return this; }
@@ -169,6 +170,35 @@ function loadPlugin(
 }
 
 describe("EU Settings input-format presentation", () => {
+  it("renders the supported-laws presentation through the declarative definition", async () => {
+    const { plugin } = loadPlugin();
+    await (plugin as unknown as { onload(): Promise<void> }).onload();
+    const tab = plugin.settingsTab! as unknown as {
+      getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }>;
+    };
+    const definition = tab.getSettingDefinitions().find((candidate) => candidate.render);
+    assert.ok(definition?.render);
+    const container = new FakeElement();
+    definition.render(new FakeSetting(container), {});
+    const euPanel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-eu");
+    assert.ok(euPanel);
+    assert.equal(euPanel.children.find((child) => child.className === "de-law-settings-supported-table")?.children.length, 5);
+    assert.equal(container.children.find((child) => child.className === "de-law-settings-jurisdiction-tabs")?.attributes.get("role"), "tablist");
+
+    const french = loadPlugin("fr", { defaultChLawLanguage: "it" });
+    await (french.plugin as unknown as { onload(): Promise<void> }).onload();
+    const frenchTab = french.plugin.settingsTab! as unknown as {
+      getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }>;
+    };
+    const frenchDefinition = frenchTab.getSettingDefinitions().find((candidate) => candidate.render)!;
+    const frenchContainer = new FakeElement();
+    frenchDefinition.render!(new FakeSetting(frenchContainer), {});
+    const swissPanel = frenchContainer.children.find((child) => child.id === "de-law-jurisdiction-panel-switzerland")!;
+    const swissTable = swissPanel.children.find((child) => child.className === "de-law-settings-supported-table")!;
+    const bvRow = swissTable.children.find((row) => row.children[0].textContent === "BV")!;
+    assert.equal(bvRow.children[1].textContent, chOfficialLawTitles["https://fedlex.data.admin.ch/eli/cc/1999/404"].fr);
+  });
+
   it("renders each accepted EU input separately in a structured row", async () => {
     const { plugin } = loadPlugin();
     await (plugin as unknown as { onload(): Promise<void> }).onload();

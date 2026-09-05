@@ -1,6 +1,6 @@
 # European Law Lookup
 
-**European Law Lookup** brings official European legal text into Obsidian with an EU-first workflow, while continuing to support selected German, Austrian, and Swiss law.
+**European Law Lookup** brings legal text from the European Union, Germany, Austria, and Switzerland into Obsidian.
 
 Look up supported EU regulations, directives, and decisions by human-readable citation or CELEX identifier, choose from the 24 official EU languages, preview the retrieved legal text and source information, and insert the formatted result into your active note only when you explicitly confirm the insertion.
 

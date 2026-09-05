@@ -1,4 +1,12 @@
-import { App, Plugin, PluginSettingTab, requestUrl, Setting, moment } from "obsidian";
+import {
+  App,
+  Plugin,
+  PluginSettingTab,
+  requestUrl,
+  Setting,
+  moment,
+  type SettingDefinitionItem,
+} from "obsidian";
 import {
   StoredLawSectionCache,
   type LawSectionCacheStorage,
@@ -96,7 +104,7 @@ const DEFAULT_SETTINGS: DeLawPluginSettings = {
 
 export default class DeLawPlugin extends Plugin {
   private providerRegistry!: ProviderRegistry;
-  private settings: DeLawPluginSettings = { ...DEFAULT_SETTINGS };
+  private pluginSettings: DeLawPluginSettings = { ...DEFAULT_SETTINGS };
   private euActIndex: EuActIndex | null = null;
   private euActIndexStorage!: EuActIndexFileStorage;
   private readonly euActIndexRefreshSingleFlight = new AsyncSingleFlight<void>();
@@ -108,7 +116,7 @@ export default class DeLawPlugin extends Plugin {
 
   async onload() {
     this.pluginData = ((await this.loadData()) as DeLawPluginData | null) ?? {};
-    this.settings = this.loadSettingsFromData(this.pluginData);
+    this.pluginSettings = this.loadSettingsFromData(this.pluginData);
     this.euActIndexStorage = this.createEuActIndexStorage();
     this.euActIndex = await this.loadEuActIndex(this.euActIndexStorage);
     this.rebuildProviderRegistry();
@@ -124,13 +132,13 @@ export default class DeLawPlugin extends Plugin {
           this.providerRegistry,
           {
             getDefaultLawSourceVariant: () =>
-              this.settings.defaultLawSourceVariant,
-            getDefaultEuLawLanguage: () => this.settings.defaultEuLawLanguage,
+              this.pluginSettings.defaultLawSourceVariant,
+            getDefaultEuLawLanguage: () => this.pluginSettings.defaultEuLawLanguage,
             setDefaultEuLawLanguage: async (value) => { await this.updateSettings({ defaultEuLawLanguage: value }); },
-            getDefaultChLawLanguage: () => this.settings.defaultChLawLanguage,
+            getDefaultChLawLanguage: () => this.pluginSettings.defaultChLawLanguage,
             setDefaultChLawLanguage: async (value) => { await this.updateSettings({ defaultChLawLanguage: value }); },
             getShowInsertedSourceMetadata: () =>
-              this.settings.showInsertedSourceMetadata,
+              this.pluginSettings.showInsertedSourceMetadata,
             setShowInsertedSourceMetadata: async (value) => {
               await this.updateSettings({ showInsertedSourceMetadata: value });
             },
@@ -307,7 +315,7 @@ export default class DeLawPlugin extends Plugin {
   }
 
   getSettings(): DeLawPluginSettings {
-    return this.settings;
+    return this.pluginSettings;
   }
 
   getUiStrings(): UiStrings {
@@ -315,8 +323,8 @@ export default class DeLawPlugin extends Plugin {
   }
 
   async updateSettings(patch: Partial<DeLawPluginSettings>): Promise<void> {
-    this.settings = {
-      ...this.settings,
+    this.pluginSettings = {
+      ...this.pluginSettings,
       ...patch,
     };
     await this.saveSettings();
@@ -326,14 +334,14 @@ export default class DeLawPlugin extends Plugin {
   private rebuildProviderRegistry() {
     const authorizer = createEuActIndexLanguageAuthorizer(this.euActIndex);
     const runtimeProviders = buildLawProviders({
-      ...this.settings,
+      ...this.pluginSettings,
       httpTransport: createObsidianRequestUrlTransport(requestUrl),
       requestUrl,
       euActLanguageAuthorizer: authorizer,
     });
     const cache = new StoredLawSectionCache(this.createLawSectionCacheStorage());
     this.providerRegistry = new ProviderRegistry(
-      buildCachedLawProviders(runtimeProviders, cache, this.settings),
+      buildCachedLawProviders(runtimeProviders, cache, this.pluginSettings),
     );
   }
 
@@ -357,7 +365,7 @@ export default class DeLawPlugin extends Plugin {
   private async saveSettings(): Promise<void> {
     await this.mutatePluginData((current) => ({
       ...current,
-      ...this.settings,
+      ...this.pluginSettings,
     }));
   }
 
@@ -381,6 +389,86 @@ class DeLawSettingsTab extends PluginSettingTab {
     private readonly plugin: DeLawPlugin,
   ) {
     super(app, plugin);
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    const ui = this.plugin.getUiStrings();
+    return [
+      {
+        name: ui.enableLocalLawTextCache,
+        desc: ui.enableLocalLawTextCacheDescription,
+        control: { type: "toggle", key: "enableLawSectionCache" },
+      },
+      {
+        name: ui.defaultEuTextLanguage,
+        desc: ui.defaultEuTextLanguageDescription,
+        control: {
+          type: "dropdown",
+          key: "defaultEuLawLanguage",
+          options: Object.fromEntries(EU_LANGUAGES.map((language) => [language.code, language.nativeName])),
+        },
+      },
+      {
+        name: ui.defaultLawTextSource,
+        control: {
+          type: "dropdown",
+          key: "defaultLawSourceVariant",
+          options: {
+            "official-de": ui.germanOfficialText,
+            "translation-en": ui.englishTranslationWhenAvailable,
+          },
+        },
+      },
+      {
+        name: ui.cacheExpirationInDays,
+        desc: ui.cacheExpirationInDaysDescription,
+        control: {
+          type: "text",
+          key: "lawSectionCacheTtlDays",
+          placeholder: ui.noExpirationPlaceholder,
+          disabled: () => !this.plugin.getSettings().enableLawSectionCache,
+        },
+      },
+      {
+        name: ui.supportedLaws,
+        render: (setting) => {
+          this.renderSupportedLawsPresentation(setting.settingEl);
+        },
+      },
+    ];
+  }
+
+  getControlValue(key: string): unknown {
+    const settings = this.plugin.getSettings();
+    switch (key) {
+      case "enableLawSectionCache": return settings.enableLawSectionCache;
+      case "defaultEuLawLanguage": return settings.defaultEuLawLanguage;
+      case "defaultLawSourceVariant": return settings.defaultLawSourceVariant;
+      case "lawSectionCacheTtlDays": return settings.lawSectionCacheTtlDays == null ? "" : String(settings.lawSectionCacheTtlDays);
+      default: return undefined;
+    }
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    switch (key) {
+      case "enableLawSectionCache":
+        await this.plugin.updateSettings({ enableLawSectionCache: value === true });
+        this.refreshDomState();
+        return;
+      case "defaultEuLawLanguage":
+        await this.plugin.updateSettings({ defaultEuLawLanguage: defaultEuLawLanguage(undefined, value) });
+        return;
+      case "defaultLawSourceVariant":
+        await this.plugin.updateSettings({
+          defaultLawSourceVariant: value === "translation-en" ? "translation-en" : "official-de",
+        });
+        return;
+      case "lawSectionCacheTtlDays":
+        await this.plugin.updateSettings({ lawSectionCacheTtlDays: normalizeTtlDays(value) });
+        return;
+      default:
+        return;
+    }
   }
 
   display(): void {
@@ -448,6 +536,11 @@ class DeLawSettingsTab extends PluginSettingTab {
           });
       });
 
+    this.renderSupportedLawsPresentation(containerEl);
+  }
+
+  private renderSupportedLawsPresentation(containerEl: HTMLElement): void {
+    const ui = this.plugin.getUiStrings();
     new Setting(containerEl).setName(ui.supportedLaws).setHeading();
     containerEl.createEl("p", {
       cls: "de-law-settings-supported-description",

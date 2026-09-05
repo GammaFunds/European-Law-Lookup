@@ -1,6 +1,6 @@
 {
   "name": "european-law-lookup",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Look up EU regulations, directives and decisions in 24 official languages, plus selected German, Austrian and Swiss law. Preview legal text from official sources and insert formatted citations into your notes.",
   "main": "main.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "esbuild": "^0.25.0",
     "eslint": "9.31.0",
     "eslint-plugin-obsidianmd": "0.4.1",
-    "obsidian": "^1.8.7",
+    "obsidian": "^1.13.0",
     "typescript": "^5.7.3"
   }
 }
