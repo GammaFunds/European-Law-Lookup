@@ -254,3 +254,74 @@ describe("euActIndexSync freshness", () => {
     assert.equal(isIndexFresh(null, 24 * 60 * 60 * 1000, now), false);
   });
 });
+
+describe("euActIndexSync full-corpus merge complexity", () => {
+  async function countMapCopyConstructions(operation: () => Promise<void>): Promise<number> {
+    const originalMap = globalThis.Map;
+    let copies = 0;
+    const countingMap = new Proxy(originalMap, {
+      construct(target, args, newTarget) {
+        if (args.length > 0 && args[0] instanceof originalMap) copies++;
+        return Reflect.construct(target, args, newTarget);
+      },
+    });
+    globalThis.Map = countingMap;
+    try {
+      await operation();
+    } finally {
+      globalThis.Map = originalMap;
+    }
+    return copies;
+  }
+
+  it("does not clone the accumulated Map once per bootstrap record", async () => {
+    const storage = new MemStorage();
+    const client = new StubClient() as unknown as CellarMetadataClient;
+    const stub = client as unknown as StubClient;
+    stub.pages = [[
+      record("32016R0679", ["deu", "eng"]),
+      record("32022L2555", ["eng"]),
+      record("32024R1689", ["deu", "eng"]),
+    ], []];
+
+    const copies = await countMapCopyConstructions(async () => {
+      const index = await bootstrapEuActIndex(client, storage);
+      assert.equal(index.entries.size, 3);
+    });
+
+    assert.equal(
+      copies,
+      0,
+      "bootstrap must build the full corpus in one mutable accumulator instead of cloning it per record",
+    );
+  });
+
+  it("clones the last-known-good Map only once during reconciliation", async () => {
+    const storage = new MemStorage();
+    storage.current = {
+      schemaVersion: 1,
+      lastSyncCheckpoint: "2020-01-01T00:00:00.000Z",
+      generatedAt: "x",
+      entries: [record("31999R0001", ["eng"])],
+    };
+
+    const client = new StubClient() as unknown as CellarMetadataClient;
+    const stub = client as unknown as StubClient;
+    stub.pages = [[
+      record("32016R0679", ["deu", "eng"]),
+      record("32022L2555", ["eng"]),
+      record("32024R1689", ["deu", "eng"]),
+    ], []];
+
+    const copies = await countMapCopyConstructions(async () => {
+      const index = await reconcileEuActIndex(client, storage);
+      assert.equal(index.entries.size, 4);
+    });
+
+    assert.equal(
+      copies,
+      1,
+      "reconciliation may clone the last-known-good Map once, but must not clone the growing Map per record",
+    );
+  });
+});

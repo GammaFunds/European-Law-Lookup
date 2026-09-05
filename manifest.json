@@ -1,9 +1,9 @@
 {
   "id": "german-law-lookup",
-  "name": "Law Lookup for Germany + Austria + Switzerland",
-  "version": "0.3.0",
+  "name": "European Law Lookup",
+  "version": "0.4.0",
   "minAppVersion": "1.8.0",
-  "description": "Look up selected German, Austrian, and Swiss laws plus multilingual GDPR articles, then insert formatted legal text into your notes.",
+  "description": "Look up EU regulations, directives and decisions in 24 official languages, plus selected German, Austrian and Swiss law. Preview legal text from official sources and insert formatted citations into your notes.",
   "author": "GammaFunds",
   "authorUrl": "https://github.com/GammaFunds",
   "isDesktopOnly": false

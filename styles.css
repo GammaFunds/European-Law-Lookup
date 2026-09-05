@@ -135,6 +135,30 @@
   word-break: break-word;
 }
 
+.de-law-settings-supported-format-row {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 2fr);
+}
+
+.de-law-settings-supported-format-row .de-law-settings-supported-format-label {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.de-law-settings-supported-format-row .de-law-settings-supported-example-list {
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.de-law-settings-supported-format-row .de-law-settings-supported-example {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .de-law-settings-supported-row-header {
   background: var(--background-secondary);
   font-size: var(--font-ui-smaller);
@@ -154,6 +178,10 @@
   .de-law-settings-supported-row {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .de-law-settings-supported-format-row {
+    grid-template-columns: 1fr;
   }
 
   .de-law-settings-supported-example {

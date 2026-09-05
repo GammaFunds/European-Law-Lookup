@@ -1,12 +1,51 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { buildLawSectionPreviewModel } from "../src/ui/lawSectionPreview";
+import { getUiStrings } from "../src/ui/i18n";
 import type { LawSection } from "../src/law/types";
 
 describe("lawSectionPreview", () => {
   it("shows official EU language metadata without a national translation warning", () => {
     const preview = buildLawSectionPreviewModel({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true });
     assert.deepEqual(preview.metadataLines, ["Amtliche EU-Sprachfassung: English.", "Quelle: EUR-Lex, DSGVO, Art. 6, abgerufen am 2026-07-10.", "Cache: live."]);
+  });
+
+  it("uses injected presentation strings", () => {
+    const preview = buildLawSectionPreviewModel({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true }, ({
+      presentationStrings: {
+        euOfficialLanguageNotice: "Version officielle de l’UE: {language}.",
+        sourceMetadata: "Source: {provider}, {lawCode}, {reference}, consulté le {date}.",
+        cacheMetadata: "Cache: {status}.",
+      },
+    } as never));
+    assert.deepEqual(preview.metadataLines, ["Version officielle de l’UE: English.", "Source: EUR-Lex, DSGVO, Art. 6, consulté le 2026-07-10.", "Cache: live."]);
+  });
+
+  it("localizes every cache state in French preview metadata", () => {
+    const presentationStrings = getUiStrings("fr");
+    const expectedLabels = {
+      live: presentationStrings.live,
+      cached: presentationStrings.cached,
+      stale: presentationStrings.stale,
+    } as const;
+
+    for (const [cacheStatus, localizedLabel] of Object.entries(expectedLabels)) {
+      const preview = buildLawSectionPreviewModel({
+        providerId: "mock",
+        providerLabel: "Mock Law Provider",
+        lawCode: "BGB",
+        lawTitle: "Bürgerliches Gesetzbuch",
+        section: "823",
+        text: "Wer vorsätzlich handelt.",
+        retrievedAt: "2026-07-10T12:00:00.000Z",
+        cacheStatus: cacheStatus as LawSection["cacheStatus"],
+        isOfficialSource: false,
+        isAuthoritativeText: false,
+      }, { presentationStrings });
+
+      assert.equal(preview.metadataLines.at(-1), presentationStrings.cacheMetadata.replace("{status}", localizedLabel));
+      assert.ok(!preview.metadataLines.at(-1)?.includes(cacheStatus));
+    }
   });
   const section: LawSection = {
     providerId: "gesetze-im-internet",

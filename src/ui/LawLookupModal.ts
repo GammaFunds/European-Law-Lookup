@@ -167,9 +167,7 @@ export class LawLookupModal extends Modal {
           ? this.ui.englishTranslationUnavailableForCitation
           : error instanceof EuActLanguageExpressionUnavailableError
             ? this.ui.euLanguageExpressionUnavailable
-            : error instanceof Error
-              ? error.message
-              : this.ui.noCitationFound,
+              : this.ui.unexpectedLookupFailure,
       );
     }
   }
@@ -192,7 +190,7 @@ export class LawLookupModal extends Modal {
         });
       });
     } else if (this.selectedJurisdiction === "CH") {
-      new Setting(this.actionsEl).setName("Swiss official text language").addDropdown((dropdown) => {
+      new Setting(this.actionsEl).setName(this.ui.swissOfficialTextLanguage).addDropdown((dropdown) => {
         dropdown.addOption("de", "Deutsch");
         dropdown.addOption("fr", "Français");
         dropdown.addOption("it", "Italiano");
@@ -254,6 +252,7 @@ export class LawLookupModal extends Modal {
 
     return formatLawSectionAsMarkdown(this.currentSection, {
       includeMetadataFooter: this.showInsertedSourceMetadata,
+      presentationStrings: this.ui,
     });
   }
 
@@ -265,6 +264,7 @@ export class LawLookupModal extends Modal {
 
     const preview = buildLawSectionPreviewModel(this.currentSection, {
       includeMetadataFooter: this.showInsertedSourceMetadata,
+      presentationStrings: this.ui,
     });
 
     this.resultEl.empty();

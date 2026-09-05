@@ -1,31 +1,82 @@
-# Law Lookup for Germany + Austria + Switzerland
+# European Law Lookup
 
-Law Lookup for Germany + Austria + Switzerland is an Obsidian plugin for curated legal-reference lookup across German, Austrian, and Swiss law plus a multilingual GDPR/DSGVO pilot. It previews retrieved legal text and inserts the formatted result into the active note only after an explicit user action.
+**European Law Lookup** brings official European legal text into Obsidian with an EU-first workflow, while continuing to support selected German, Austrian, and Swiss law.
+
+Look up supported EU regulations, directives, and decisions by human-readable citation or CELEX identifier, choose from the 24 official EU languages, preview the retrieved legal text and source information, and insert the formatted result into your active note only when you explicitly confirm the insertion.
+
+## Highlights
+
+- **EU-first legal lookup** for supported sector-3 regulations, directives, and decisions.
+- **Human-readable EU citations** such as `Richtlinie 2011/61/EU Art. 1` and `Verordnung (EU) 2024/3110 Art. 1`.
+- **Direct CELEX lookup** such as `32016R0679 Art. 1`.
+- **24 official EU languages** for official EU legal text when the requested language expression is available.
+- **Germany, Austria, and Switzerland** remain available as additional jurisdictions.
+- **Official-source retrieval** from EUR-Lex / Publications Office CELLAR, Gesetze im Internet, RIS, and Fedlex.
+- **Preview before insertion** so a lookup never modifies a note without an explicit user action.
+- **Source-aware metadata** for citations, retrieval dates, jurisdiction, language, cache state, and source status where available.
+- **Local caching** of successful legal-text lookups.
+- **No AI-generated legal text and no machine-generated translations.**
 
 ## Demo
 
-![Law Lookup for Germany + Austria + Switzerland demo](assets/german-law-lookup-demo.gif)
+![European Law Lookup demo](assets/german-law-lookup-demo.gif)
 
-## Features
+## European Union
 
-- Select Germany, Austria, Switzerland, or the European Union as the lookup jurisdiction.
-- Look up supported section and article references directly from Obsidian.
-- Preview retrieved legal text before inserting it.
-- Insert text only after an explicit user action.
-- Optionally include source, citation, retrieval-date, jurisdiction, language, and cache metadata.
-- Use German official text as the default where applicable.
-- Use published English text only for explicitly configured sources.
-- Use a separate 24-language selector for the multilingual GDPR/DSGVO pilot.
-- Cache successful lookups locally according to the plugin settings.
-- Follow the active Obsidian interface language for plugin UI labels.
+EU legislation is the primary focus of European Law Lookup.
 
-## Current legal scope
+The local EU metadata index discovers supported sector-3 acts from the Publications Office CELLAR. The index is used to resolve legal-act identity and available official language expressions; legal text is retrieved from the authoritative provider path when you perform a lookup.
 
-The plugin supports only explicitly mapped laws and reference forms. The complete supported-law catalog and example inputs are available in the plugin settings.
+### Supported EU act families
 
-### Germany
+The generic EU index admits supported sector-3 CELEX acts of these document types:
 
-The German scope covers selected federal laws retrieved through the validated Gesetze im Internet provider path. It supports common section references and selected article references, including GG and EGBGB forms.
+- Regulations (`R`)
+- Directives (`L`)
+- Decisions (`D`)
+
+The current lookup workflow is article-oriented.
+
+### EU input examples
+
+Human-readable references:
+
+- `Richtlinie 2011/61/EU Art. 1`
+- `Verordnung (EU) 2024/3110 Art. 1`
+- `Art. 6 DSGVO`
+- `GDPR Art. 6`
+
+Direct CELEX references:
+
+- `32016R0679 Art. 1`
+
+Human-readable resolution is intentionally fail-closed where a reference is ambiguous. Direct CELEX input remains available for supported acts.
+
+### EU languages
+
+European Law Lookup supports the 24 official EU languages for EU legal text:
+
+Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Irish, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, and Swedish.
+
+The plugin requests official language expressions from EU sources. It does not generate translations. If the requested official expression is unavailable, the provider path follows the plugin's defined language/fallback rules rather than inventing text.
+
+### EU metadata refresh
+
+The EU act index is stored locally in dedicated compact index files instead of inside the normal Obsidian plugin settings document.
+
+A stale index may be refreshed in the background when the plugin loads. This refresh contacts the Publications Office CELLAR and can take time because it validates a large public corpus. The last-known-good local index remains the authority until a new candidate index has been completely written and activated.
+
+A metadata refresh is separate from an individual legal-text lookup.
+
+### Current EU boundaries
+
+European Law Lookup does **not** claim generic support for every possible CELEX resource or document component.
+
+The current generic EU workflow is focused on supported sector-3 regulations, directives, and decisions and on article lookup. Recitals, annexes, corrigenda, arbitrary non-`R`/`L`/`D` document families, and other unsupported reference forms remain outside the guaranteed scope unless explicitly added in a future release.
+
+## Germany
+
+The German scope covers selected federal laws through the validated **Gesetze im Internet** provider path.
 
 Examples:
 
@@ -36,38 +87,13 @@ Examples:
 - `Art. 1 GG`
 - `Art. 229 § 6 EGBGB`
 
-Published English legal text is available only for explicitly configured German laws. If an English source is unavailable or not configured, the lookup falls back to German official text. The plugin never generates translations.
+Published English legal text is used only for explicitly configured official or published sources. If no supported English source exists, the lookup uses the configured German official-text behavior. The plugin never creates its own translation.
 
-### Austria
+The complete supported-law catalog and example inputs are available in the plugin settings.
 
-The Austrian scope covers exactly 24 explicitly mapped federal laws through RIS:
+## Austria
 
-- ABGB
-- StGB
-- B-VG
-- ZPO
-- JN
-- EO
-- UGB
-- StPO
-- GmbHG
-- AktG
-- IO
-- KartG
-- FBG
-- GewO
-- KSchG
-- VersVG
-- AVG
-- VwGVG
-- VwGG
-- VfGG
-- ZustG
-- SPG
-- DSG
-- BAO
-
-Select **Austria** in the jurisdiction field or use an explicit Austrian reference. German and Austrian laws with the same abbreviation remain isolated by jurisdiction.
+The Austrian scope covers 24 explicitly mapped federal laws through **RIS (Rechtsinformationssystem des Bundes)**.
 
 Examples:
 
@@ -77,37 +103,15 @@ Examples:
 - `§ 1 GmbHG`
 - `§ 35a DSG`
 
-Austrian English support is limited to the published English B-VG article text configured for this plugin. It does not provide general English translations for Austrian law.
+German and Austrian laws with the same abbreviation remain isolated by jurisdiction.
 
-### Switzerland
+RIS consolidated federal-law text is an informational, legally non-binding version and is not presented as an authentic Federal Law Gazette publication.
 
-The Swiss scope covers article references for 23 explicitly mapped federal laws through Fedlex:
+The complete supported-law catalog is available in the plugin settings.
 
-- BV
-- ZGB
-- OR
-- StGB
-- ZPO
-- StPO
-- SchKG
-- VwVG
-- BGG
-- DSG
-- IPRG
-- DBG
-- StHG
-- AHVG
-- IVG
-- ATSG
-- ArG
-- SVG
-- AIG
-- KG
-- URG
-- PatG
-- MSchG
+## Switzerland
 
-Select **Switzerland** in the jurisdiction field. The current Swiss provider retrieves German article text only. Swiss section-style references, cantonal law, and unlisted federal laws are outside the current scope.
+The Swiss scope covers article references for 23 explicitly mapped federal laws through **Fedlex**.
 
 Examples:
 
@@ -116,47 +120,63 @@ Examples:
 - `Art. 1 OR`
 - `Art. 1 DSG`
 
-### European Union
+Supported Swiss legal-text languages are:
 
-EU support in version 0.2.0 is limited to articles of the GDPR/DSGVO (Regulation (EU) 2016/679) in all 24 official EU language versions. Generic EU act lookup is not included yet but is under development.
+- German
+- French
+- Italian
 
-- Article references only.
-- 24 official EU languages through the existing language selector.
-- Retrieval through Publications Office Cellar with official language-specific EUR-Lex source links.
-- Separate jurisdiction and cache identity from German, Austrian, and Swiss lookups.
+The settings UI also presents the official full titles of the mapped Swiss laws in these languages.
 
-Examples:
+Swiss section-style references, cantonal law, and unlisted federal laws remain outside the current scope.
 
-- `Art. 6 DSGVO`
-- `GDPR Art. 6`
+## How it works
 
-This release does not provide generic CELEX lookup or general support for arbitrary EU regulations, directives, decisions, consolidated versions, recitals, annexes, corrigenda, or the AI Act.
+1. Open the command palette.
+2. Run the law lookup command.
+3. Select the jurisdiction.
+4. Enter a supported legal reference.
+5. Select the desired legal-text language where applicable.
+6. Review the legal text, citation, and source information.
+7. Insert the result into the active note.
+
+The plugin never inserts or changes note content without an explicit insertion action.
 
 ## Sources and legal status
 
-The plugin retrieves text from public legal-information services:
+European Law Lookup retrieves legal information from public official or governmental legal-information services:
 
+- **European Union:** Publications Office CELLAR and EUR-Lex.
 - **Germany:** Gesetze im Internet.
 - **Austria:** RIS, Bundesrecht konsolidiert.
 - **Switzerland:** Fedlex.
-- **European Union:** Publications Office Cellar and EUR-Lex for the GDPR/DSGVO pilot.
 
-RIS consolidated federal-law text is an informational, legally non-binding version and is not presented as an authentic Federal Law Gazette publication. Source status is shown in the lookup metadata where available.
+The plugin is a research and productivity tool, not legal advice.
 
-The plugin is a research and productivity tool. It is not legal advice. Always verify legal text, version, applicability, and source status against the relevant official publication before relying on it.
+Always verify legal text, version, applicability, consolidation status, and source status against the relevant official publication before relying on it.
 
 ## Privacy and network access
 
-- Loading the plugin does not initiate legal-provider requests.
-- Network requests occur only after a user starts a lookup.
-- The request contains the selected legal reference and the provider parameters needed to retrieve it.
 - Note contents are not sent to legal-information providers.
-- The plugin does not use AI services and never generates translations.
-- Successful results may be cached locally in Obsidian plugin data according to the configured cache settings.
+- The plugin does not use AI services to generate legal text.
+- The plugin never generates translations.
+- Legal-text network requests occur when you start a lookup that is not satisfied by the configured local cache.
+- A stale EU metadata index may trigger a background CELLAR metadata refresh when the plugin loads.
+- The EU metadata refresh concerns public act metadata; it does not upload note contents.
+- Successful legal-text results may be cached locally according to the plugin settings.
+- The EU metadata index is persisted locally in dedicated plugin files.
 
 ## Installation
 
-For manual installation, create this directory:
+### Obsidian Community Plugins
+
+Install **European Law Lookup** from Obsidian's Community Plugins directory and enable it under **Settings → Community plugins**.
+
+### Manual installation
+
+The technical plugin identifier intentionally remains `german-law-lookup` for compatibility with existing installations.
+
+Create or use:
 
 ```text
 <your-vault>/.obsidian/plugins/german-law-lookup/
@@ -168,19 +188,21 @@ Copy exactly these release assets into it:
 - `main.js`
 - `styles.css`
 
-Reload Obsidian and enable **Law Lookup for Germany + Austria + Switzerland** under **Settings → Community plugins**.
+Reload Obsidian and enable **European Law Lookup**.
 
-## Usage
+## Compatibility and rename note
 
-1. Open the command palette.
-2. Run the law lookup command.
-3. Select Germany, Austria, Switzerland, or the European Union.
-4. Enter a supported legal reference.
-5. For the GDPR/DSGVO pilot, select the desired EU language.
-6. Review the preview and source information.
-7. Insert the result into the active note.
+Version 0.4.0 introduces the public name **European Law Lookup**.
 
-The plugin never modifies a note without an explicit insertion action.
+The visible plugin name and repository branding change, but the Obsidian plugin ID remains:
+
+```text
+german-law-lookup
+```
+
+Keeping the existing ID preserves continuity for current installations and updates.
+
+The GitHub repository is intended to move from `german-law-lookup` to `european-law-lookup` after the 0.4.0 release is published and verified.
 
 ## Development
 
@@ -194,6 +216,12 @@ Run the complete test suite:
 
 ```bash
 npm test
+```
+
+Run lint:
+
+```bash
+npm run lint
 ```
 
 Build the production bundle:
@@ -210,7 +238,9 @@ An Obsidian release contains:
 - `main.js`
 - `styles.css`
 
-`versions.json` remains in the repository to map plugin versions to their minimum supported Obsidian version. Do not include `node_modules`, test output, source maps, or development files in the release assets.
+`versions.json` remains in the repository to map plugin versions to their minimum supported Obsidian version.
+
+Do not include `node_modules`, test output, source maps, local EU index files, or other development/runtime-local files in release assets.
 
 ## License
 

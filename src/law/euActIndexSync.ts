@@ -12,6 +12,7 @@ import {
   serializeEuActIndex,
   validateEuActIndexEntry,
   type EuActIndex,
+  type EuActIndexEntry,
   type StoredEuActIndex,
 } from "./euActIndex";
 
@@ -71,7 +72,7 @@ async function buildCandidateFromRecords(
   client: CellarMetadataClient,
   options: EuActIndexSyncOptions,
 ): Promise<EuActIndex> {
-  let index = emptyEuActIndex();
+  const entries = new Map<string, EuActIndexEntry>();
   const pageSize = options.pageSize ?? client.pageSize;
   const maxPages = options.maxPages ?? Number.POSITIVE_INFINITY;
   const guard = new TraversalIdentityGuard();
@@ -83,7 +84,7 @@ async function buildCandidateFromRecords(
     for (const record of page.records) {
       guard.observe(record);
       const entry = validateEuActIndexEntry(record);
-      index = addOrReplaceEntry(index, entry);
+      entries.set(entry.celex, entry);
     }
     pages++;
     if (page.records.length === 0) break;
@@ -97,7 +98,7 @@ async function buildCandidateFromRecords(
   return {
     schemaVersion: EU_ACT_INDEX_SCHEMA_VERSION,
     lastSyncCheckpoint: nowIso(options),
-    entries: index.entries,
+    entries,
   };
 }
 
@@ -133,11 +134,7 @@ export async function reconcileEuActIndex(
   if (!current) {
     return bootstrapEuActIndex(client, storage, options);
   }
-  let index: EuActIndex = {
-    schemaVersion: current.schemaVersion,
-    lastSyncCheckpoint: current.lastSyncCheckpoint,
-    entries: new Map(current.entries),
-  };
+  const entries = new Map(current.entries);
   const pageSize = options.pageSize ?? client.pageSize;
   const maxPages = options.maxPages ?? Number.POSITIVE_INFINITY;
   const guard = new TraversalIdentityGuard();
@@ -149,7 +146,7 @@ export async function reconcileEuActIndex(
     for (const record of page.records) {
       guard.observe(record);
       const entry = validateEuActIndexEntry(record);
-      index = addOrReplaceEntry(index, entry);
+      entries.set(entry.celex, entry);
     }
     pages++;
     if (page.records.length === 0) break;
@@ -163,7 +160,7 @@ export async function reconcileEuActIndex(
   const candidate: EuActIndex = {
     schemaVersion: EU_ACT_INDEX_SCHEMA_VERSION,
     lastSyncCheckpoint: nowIso(options),
-    entries: index.entries,
+    entries,
   };
   if (candidate.entries.size === 0) {
     throw new EuActIndexSyncError("CELLAR reconciliation produced an empty EU act index; keeping last-known-good.");

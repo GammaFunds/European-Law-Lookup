@@ -118,4 +118,4 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "Law Lookup for Germany + Austria + Switzerland $RELEASE_TAG" main.js manifest.json styles.css
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "European Law Lookup $RELEASE_TAG" main.js manifest.json styles.css

@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { formatLawSectionAsMarkdown } from "../src/law/CitationFormatter";
+import { getUiStrings } from "../src/ui/i18n";
 import type { LawSection } from "../src/law/types";
 
 describe("formatLawSectionAsMarkdown", () => {
@@ -8,6 +9,44 @@ describe("formatLawSectionAsMarkdown", () => {
     const markdown = formatLawSectionAsMarkdown({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true });
     assert.match(markdown, /^Amtliche EU-Sprachfassung: English\.$/m);
     assert.doesNotMatch(markdown, /Englischer Gesetzestext von Gesetze im Internet/);
+  });
+
+  it("uses injected presentation strings for Markdown metadata", () => {
+    const markdown = formatLawSectionAsMarkdown({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true }, ({
+      presentationStrings: {
+        euOfficialLanguageNotice: "Version officielle de l’UE: {language}.",
+        sourceMetadata: "Source: {provider}, {lawCode}, {reference}, consulté le {date}.",
+        cacheMetadata: "Cache: {status}.",
+      },
+    } as never));
+    assert.match(markdown, /Version officielle de l’UE: English\./);
+    assert.match(markdown, /Source: EUR-Lex, DSGVO, Art\. 6, consulté le 2026-07-10\./);
+  });
+
+  it("localizes cached and stale states in French Markdown metadata", () => {
+    const presentationStrings = getUiStrings("fr");
+    const sections: Array<[LawSection["cacheStatus"], string]> = [
+      ["cached", presentationStrings.cached],
+      ["stale", presentationStrings.stale],
+    ];
+
+    for (const [cacheStatus, localizedLabel] of sections) {
+      const markdown = formatLawSectionAsMarkdown({
+        providerId: "mock",
+        providerLabel: "Mock Law Provider",
+        lawCode: "BGB",
+        lawTitle: "Bürgerliches Gesetzbuch",
+        section: "823",
+        text: "Wer vorsätzlich handelt.",
+        retrievedAt: "2026-07-10T12:00:00.000Z",
+        cacheStatus,
+        isOfficialSource: false,
+        isAuthoritativeText: false,
+      }, { presentationStrings });
+
+      assert.ok(markdown.includes(presentationStrings.cacheMetadata.replace("{status}", localizedLabel)));
+      assert.ok(!markdown.includes(presentationStrings.cacheMetadata.replace("{status}", cacheStatus)));
+    }
   });
   const section: LawSection = {
     providerId: "mock",

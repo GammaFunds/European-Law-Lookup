@@ -17,7 +17,16 @@ import type { LawReference, LawSection } from "../src/law/types";
 import { persistCacheToggleAndRefresh } from "../src/settingsRefresh";
 
 class SettingsTestPlugin {
-  app = undefined;
+  app = { vault: {
+    configDir: ".obsidian",
+    adapter: {
+      async exists(): Promise<boolean> { return false; },
+      async read(): Promise<string> { throw new Error("settings test index file must not be read"); },
+      async write(): Promise<void> {},
+      async remove(): Promise<void> {},
+    },
+  } };
+  manifest = { id: "german-law-lookup" };
   settingTab: unknown;
 
   async loadData() {
