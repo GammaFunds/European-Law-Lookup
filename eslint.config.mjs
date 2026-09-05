@@ -16,6 +16,9 @@ export default [
       obsidianmd,
     },
     rules: {
+      "no-useless-escape": "error",
+      "@typescript-eslint/no-redundant-type-constituents": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
@@ -24,6 +27,7 @@ export default [
       "obsidianmd/prefer-create-el": "error",
       "no-irregular-whitespace": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "obsidianmd/prefer-window-timers": "error",
     },
   },
 ];

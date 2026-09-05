@@ -1,7 +1,7 @@
 {
   "id": "german-law-lookup",
   "name": "European Law Lookup",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "minAppVersion": "1.8.0",
   "description": "Look up EU regulations, directives and decisions in 24 official languages, plus selected German, Austrian and Swiss law. Preview legal text from official sources and insert formatted citations into your notes.",
   "author": "GammaFunds",

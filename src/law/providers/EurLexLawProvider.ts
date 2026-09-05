@@ -299,7 +299,7 @@ function tokenizeNotice(input: string): NoticeToken[] | null {
       const closing = /^<\/([A-Za-z_:][\w:.-]*)\s*>$/.exec(token);
       const opening = /^<([A-Za-z_:][\w:.-]*)([\s\S]*?)>$/.exec(token);
       if (closing) tokens.push({ kind: "close", name: closing[1], attributes: "" });
-      else if (opening && !opening[2].trimEnd().endsWith("/")) {
+      else if (opening && !/\/\s*$/.test(opening[2])) {
         tokens.push({ kind: "open", name: opening[1], attributes: opening[2] });
       } else return null;
     }

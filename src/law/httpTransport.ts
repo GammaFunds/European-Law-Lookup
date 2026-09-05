@@ -83,7 +83,7 @@ export interface CellarRetryOptions {
 }
 
 function defaultCellarRetrySleep(ms: number): Promise<void> {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
 export async function requestCellarWithRetry<TResponse extends { status: number }>(
@@ -135,7 +135,7 @@ export function createCellarSparqlJsonFetcher(
       options,
     );
 
-    return response.json as unknown;
+    return response.json;
   };
 }
 

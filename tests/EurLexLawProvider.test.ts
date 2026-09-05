@@ -949,6 +949,16 @@ describe("EurLexLawProvider", () => {
     assert.ok(result.section);
     assert.equal(result.calls, 2);
   });
+
+  it("accepts ordinary opening tags but rejects self-closing URI-like tags", async () => {
+    const accepted = await resultForNotice(validNoticeBody());
+    assert.ok(accepted.section);
+    assert.equal(accepted.calls, 2);
+
+    const rejected = await resultForNotice(validNoticeBody().replace("<URI>", "<URI/>"));
+    assert.equal(rejected.section, null);
+    assert.equal(rejected.calls, 1);
+  });
 });
 
 describe("F5 authoritative requested-language XHTML absence", () => {

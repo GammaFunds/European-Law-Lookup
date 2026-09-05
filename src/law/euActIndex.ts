@@ -1,4 +1,4 @@
-import type { EuDocumentType, EuLawLanguage } from "./types";
+import type { EuDocumentType } from "./types";
 import { parseEuCelex } from "./euActRegistry";
 import { isEuCellarLanguageCode } from "./euLanguages";
 
@@ -212,7 +212,7 @@ export function addOrReplaceEntry(index: EuActIndex, entry: EuActIndexEntry): Eu
   };
 }
 
-export function euActIndexEntryOfficialTitle(entry: EuActIndexEntry, language?: EuLawLanguage | string): string | null {
+export function euActIndexEntryOfficialTitle(entry: EuActIndexEntry, language?: string): string | null {
   if (language && entry.titlesByLanguage[language]) return entry.titlesByLanguage[language];
   for (const preferred of ["en", "de", "fr"]) {
     if (entry.titlesByLanguage[preferred]) return entry.titlesByLanguage[preferred];

@@ -160,7 +160,7 @@ export function buildWorkMetadataQuery(workUri: string, celex: string): string {
   return [
     "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>",
     "PREFIX purl: <http://purl.org/dc/elements/1.1/>",
-    `SELECT \"${celex}\" AS ?celex (GROUP_CONCAT(DISTINCT ?langCode; SEPARATOR=' ') AS ?languages) WHERE {`,
+    `SELECT "${celex}" AS ?celex (GROUP_CONCAT(DISTINCT ?langCode; SEPARATOR=' ') AS ?languages) WHERE {`,
     `  VALUES ?work { <${workUri}> }`,
     "  ?expr cdm:expression_belongs_to_work ?work ;",
     "        cdm:expression_uses_language ?lang .",
