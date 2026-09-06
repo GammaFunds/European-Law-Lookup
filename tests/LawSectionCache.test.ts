@@ -14,7 +14,6 @@ import {
 import { buildCachedLawProviders } from "../src/law/cachedProviderComposition";
 import { LawProviderUnavailableError } from "../src/law/errors";
 import type { LawReference, LawSection } from "../src/law/types";
-import { persistCacheToggleAndRefresh } from "../src/settingsRefresh";
 
 class SettingsTestPlugin {
   app = { vault: {
@@ -56,10 +55,16 @@ class SettingsTestPlugin {
 }
 
 class SettingsTestPluginSettingTab {
+  refreshDomStateCalls = 0;
+
   constructor(
     public readonly app: unknown,
     public readonly plugin: unknown,
   ) {}
+
+  refreshDomState() {
+    this.refreshDomStateCalls += 1;
+  }
 }
 
 const settingsObsidianStubPath = "/tmp/opencode/obsidian-settings-stub.cjs";
@@ -112,6 +117,12 @@ async function loadSettingsTabFromBundle(): Promise<unknown> {
 }
 
 describe("settings tab rendering", () => {
+  it("uses the declarative settings path without a legacy display method", async () => {
+    const settingsTab = await loadSettingsTabFromBundle() as object;
+
+    assert.equal(Object.prototype.hasOwnProperty.call(Object.getPrototypeOf(settingsTab), "display"), false);
+  });
+
   it("registers the complete declarative settings surface", async () => {
     const settingsTab = await loadSettingsTabFromBundle() as {
       getSettingDefinitions: () => Array<Record<string, unknown>>;
@@ -151,60 +162,22 @@ describe("settings tab rendering", () => {
     assert.equal(await settingsTab.setControlValue("internalOnly", "bad"), undefined);
     assert.equal(settingsTab.plugin.savedData?.internalOnly, undefined);
   });
+
+  it("refreshes the cache toggle declaratively after persistence", async () => {
+    const settingsTab = await loadSettingsTabFromBundle() as {
+      setControlValue: (key: string, value: unknown) => Promise<void>;
+      plugin: SettingsTestPlugin;
+      refreshDomStateCalls: number;
+    };
+
+    await settingsTab.setControlValue("enableLawSectionCache", false);
+
+    assert.equal(settingsTab.plugin.savedData?.enableLawSectionCache, false);
+    assert.equal(settingsTab.refreshDomStateCalls, 1);
+  });
 });
 
 describe("lawSectionCacheKey", () => {
-  it("refreshes settings declaratively when available and falls back to display otherwise", async () => {
-    const updateEvents: string[] = [];
-    const updateState = { enableLawSectionCache: true };
-    const updateSettings = async (patch: { enableLawSectionCache: boolean }) => {
-      updateEvents.push(`persist:${patch.enableLawSectionCache}`);
-      updateState.enableLawSectionCache = patch.enableLawSectionCache;
-    };
-
-    const updateTarget = {
-      display() {
-        updateEvents.push("display");
-      },
-      update() {
-        updateEvents.push("update");
-      },
-    };
-
-    const updateResult = await persistCacheToggleAndRefresh({
-      enabled: false,
-      target: updateTarget,
-      updateSettings,
-    });
-
-    assert.deepEqual(updateEvents, ["persist:false", "update"]);
-    assert.equal(updateState.enableLawSectionCache, false);
-    assert.equal(updateResult.enableLawSectionCache, false);
-    assert.equal(updateResult.ttlDisabled, true);
-    assert.equal(updateResult.refreshedVia, "update");
-
-    const fallbackEvents: string[] = [];
-    const fallbackState = { enableLawSectionCache: true };
-    const fallbackResult = await persistCacheToggleAndRefresh({
-      enabled: true,
-      target: {
-        display() {
-          fallbackEvents.push("display");
-        },
-      },
-      updateSettings: async (patch: { enableLawSectionCache: boolean }) => {
-        fallbackEvents.push(`persist:${patch.enableLawSectionCache}`);
-        fallbackState.enableLawSectionCache = patch.enableLawSectionCache;
-      },
-    });
-
-    assert.deepEqual(fallbackEvents, ["persist:true", "display"]);
-    assert.equal(fallbackState.enableLawSectionCache, true);
-    assert.equal(fallbackResult.enableLawSectionCache, true);
-    assert.equal(fallbackResult.ttlDisabled, false);
-    assert.equal(fallbackResult.refreshedVia, "display");
-  });
-
   it("isolates EU official language cache keys without legacy fallback", async () => {
     const de = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" as const };
     const en = { ...de, language: "en" as const };

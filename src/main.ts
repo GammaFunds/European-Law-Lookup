@@ -34,14 +34,13 @@ import {
 } from "./law/providers/fedlexMapping";
 import type { LawSection, LawSourceVariant } from "./law/types";
 import type { EuLawLanguage } from "./law/types";
-import { EU_LANGUAGES, defaultEuLawLanguage } from "./law/euLanguages";
+import { defaultEuLawLanguage } from "./law/euLanguages";
 import {
   defaultLawSourceVariantForLanguage,
   getUiStrings,
   type UiStrings,
 } from "./ui/i18n";
 import { LawLookupModal, type LawLookupModalIndexProvider } from "./ui/LawLookupModal";
-import { persistCacheToggleAndRefresh } from "./settingsRefresh";
 import {
   parseStoredEuActIndex,
   type EuActIndex,
@@ -393,6 +392,32 @@ class DeLawSettingsTab extends PluginSettingTab {
 
   getSettingDefinitions(): SettingDefinitionItem[] {
     const ui = this.plugin.getUiStrings();
+    const euLanguageOptions: Record<string, string> = {
+      bg: "Български",
+      es: "Español",
+      cs: "Čeština",
+      da: "Dansk",
+      de: "Deutsch",
+      et: "Eesti",
+      el: "Ελληνικά",
+      en: "English",
+      fr: "Français",
+      ga: "Gaeilge",
+      hr: "Hrvatski",
+      it: "Italiano",
+      lv: "Latviešu",
+      lt: "Lietuvių",
+      hu: "Magyar",
+      mt: "Malti",
+      nl: "Nederlands",
+      pl: "Polski",
+      pt: "Português",
+      ro: "Română",
+      sk: "Slovenčina",
+      sl: "Slovenščina",
+      fi: "Suomi",
+      sv: "Svenska",
+    };
     return [
       {
         name: ui.enableLocalLawTextCache,
@@ -405,7 +430,7 @@ class DeLawSettingsTab extends PluginSettingTab {
         control: {
           type: "dropdown",
           key: "defaultEuLawLanguage",
-          options: Object.fromEntries(EU_LANGUAGES.map((language) => [language.code, language.nativeName])),
+          options: euLanguageOptions,
         },
       },
       {
@@ -469,74 +494,6 @@ class DeLawSettingsTab extends PluginSettingTab {
       default:
         return;
     }
-  }
-
-  display(): void {
-    const { containerEl } = this;
-    const settings = this.plugin.getSettings();
-    const ui = this.plugin.getUiStrings();
-
-    containerEl.empty();
-
-    new Setting(containerEl)
-      .setName(ui.enableLocalLawTextCache)
-      .setDesc(ui.enableLocalLawTextCacheDescription)
-      .addToggle((toggle) => {
-        toggle
-          .setValue(settings.enableLawSectionCache)
-          .onChange(async (value) => {
-            await persistCacheToggleAndRefresh({
-              enabled: value,
-              target: this,
-              updateSettings: async (patch) => {
-                await this.plugin.updateSettings(patch);
-              },
-            });
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(ui.defaultEuTextLanguage)
-      .setDesc(ui.defaultEuTextLanguageDescription)
-      .addDropdown((dropdown) => {
-        for (const language of EU_LANGUAGES) dropdown.addOption(language.code, language.nativeName);
-        dropdown.setValue(settings.defaultEuLawLanguage).onChange(async (value) => {
-          await this.plugin.updateSettings({ defaultEuLawLanguage: defaultEuLawLanguage(undefined, value) });
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(ui.defaultLawTextSource)
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("official-de", ui.germanOfficialText)
-          .addOption("translation-en", ui.englishTranslationWhenAvailable)
-          .setValue(settings.defaultLawSourceVariant)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({
-              defaultLawSourceVariant:
-                value === "translation-en" ? "translation-en" : "official-de",
-            });
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(ui.cacheExpirationInDays)
-      .setDesc(ui.cacheExpirationInDaysDescription)
-      .addText((text) => {
-        text.inputEl.type = "number";
-        text
-          .setDisabled(!settings.enableLawSectionCache)
-          .setPlaceholder(ui.noExpirationPlaceholder)
-          .setValue(settings.lawSectionCacheTtlDays == null ? "" : String(settings.lawSectionCacheTtlDays))
-          .onChange(async (value) => {
-            await this.plugin.updateSettings({
-              lawSectionCacheTtlDays: normalizeTtlDays(value),
-            });
-          });
-      });
-
-    this.renderSupportedLawsPresentation(containerEl);
   }
 
   private renderSupportedLawsPresentation(containerEl: HTMLElement): void {

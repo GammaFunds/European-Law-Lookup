@@ -14,7 +14,7 @@ import {
   type EuActIndexEntry,
 } from "../src/law/euActIndex";
 import { parseEuCelex } from "../src/law/euActRegistry";
-import { cellarLanguageNativeName } from "../src/law/euLanguages";
+import { cellarLanguageNativeName, isEuCellarLanguageCode } from "../src/law/euLanguages";
 import {
   createEuActIndexLanguageAuthorizer,
   EuActLanguageExpressionUnavailableError,
@@ -35,6 +35,13 @@ function entry(overrides: Partial<EuActIndexEntry> = {}): EuActIndexEntry {
 }
 
 describe("euActIndex identity scope", () => {
+  it("keeps an already-typed string usable in the invalid-language branch", () => {
+    const candidate: string = "de";
+    if (!isEuCellarLanguageCode(candidate)) {
+      assert.equal(candidate.toUpperCase(), "DE");
+    }
+  });
+
   it("parses a valid original sector-3 regulation CELEX", () => {
     assert.ok(parseEuCelex("32016R0679"));
     assert.equal(parseEuCelex("32016R0679")?.documentType, "R");

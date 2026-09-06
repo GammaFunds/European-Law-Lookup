@@ -107,9 +107,9 @@ class FakePlugin {
     },
   } };
   manifest = { id: "german-law-lookup" };
-  settingsTab?: { containerEl: FakeElement; display(): void };
+  settingsTab?: { containerEl: FakeElement; getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }> };
   storedData: Record<string, unknown> | null = null;
-  addSettingTab(tab: { containerEl: FakeElement; display(): void }): void {
+  addSettingTab(tab: { containerEl: FakeElement; getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }> }): void {
     tab.containerEl = new FakeElement();
     this.settingsTab = tab;
   }
@@ -169,17 +169,20 @@ function loadPlugin(
   }
 }
 
+function renderSettingsTab(tab: FakePlugin["settingsTab"]): FakeElement {
+  assert.ok(tab);
+  const definition = tab.getSettingDefinitions().find((candidate) => candidate.render);
+  assert.ok(definition?.render);
+  const container = new FakeElement();
+  definition.render(new FakeSetting(container), {});
+  return container;
+}
+
 describe("EU Settings input-format presentation", () => {
   it("renders the supported-laws presentation through the declarative definition", async () => {
     const { plugin } = loadPlugin();
     await (plugin as unknown as { onload(): Promise<void> }).onload();
-    const tab = plugin.settingsTab! as unknown as {
-      getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }>;
-    };
-    const definition = tab.getSettingDefinitions().find((candidate) => candidate.render);
-    assert.ok(definition?.render);
-    const container = new FakeElement();
-    definition.render(new FakeSetting(container), {});
+    const container = renderSettingsTab(plugin.settingsTab);
     const euPanel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-eu");
     assert.ok(euPanel);
     assert.equal(euPanel.children.find((child) => child.className === "de-law-settings-supported-table")?.children.length, 5);
@@ -187,12 +190,7 @@ describe("EU Settings input-format presentation", () => {
 
     const french = loadPlugin("fr", { defaultChLawLanguage: "it" });
     await (french.plugin as unknown as { onload(): Promise<void> }).onload();
-    const frenchTab = french.plugin.settingsTab! as unknown as {
-      getSettingDefinitions(): Array<{ render?: (setting: FakeSetting, group: unknown) => void }>;
-    };
-    const frenchDefinition = frenchTab.getSettingDefinitions().find((candidate) => candidate.render)!;
-    const frenchContainer = new FakeElement();
-    frenchDefinition.render!(new FakeSetting(frenchContainer), {});
+    const frenchContainer = renderSettingsTab(french.plugin.settingsTab);
     const swissPanel = frenchContainer.children.find((child) => child.id === "de-law-jurisdiction-panel-switzerland")!;
     const swissTable = swissPanel.children.find((child) => child.className === "de-law-settings-supported-table")!;
     const bvRow = swissTable.children.find((row) => row.children[0].textContent === "BV")!;
@@ -202,8 +200,7 @@ describe("EU Settings input-format presentation", () => {
   it("renders each accepted EU input separately in a structured row", async () => {
     const { plugin } = loadPlugin();
     await (plugin as unknown as { onload(): Promise<void> }).onload();
-    const container = (plugin as FakePlugin).settingsTab!.containerEl;
-    (plugin as FakePlugin).settingsTab!.display();
+    const container = renderSettingsTab(plugin.settingsTab);
 
     const euPanel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-eu")!;
     const table = euPanel.children.find((child) => child.className === "de-law-settings-supported-table")!;
@@ -302,8 +299,8 @@ describe("Swiss official Settings titles", () => {
     it(`${locale} UI renders the ${language} official Swiss title`, async () => {
       const { plugin } = loadPlugin(locale, { defaultChLawLanguage: "fr" });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
-      plugin.settingsTab!.display();
-      const panel = plugin.settingsTab!.containerEl.children.find(
+      const container = renderSettingsTab(plugin.settingsTab);
+      const panel = container.children.find(
         (child) => child.id === "de-law-jurisdiction-panel-switzerland",
       )!;
       const table = panel.children.find((child) => child.className === "de-law-settings-supported-table")!;
@@ -322,8 +319,8 @@ describe("Swiss official Settings titles", () => {
       const { plugin } = loadPlugin(locale, { defaultChLawLanguage: textLanguage });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
       assert.equal((plugin as unknown as { getSettings(): { defaultChLawLanguage: string } }).getSettings().defaultChLawLanguage, textLanguage);
-      plugin.settingsTab!.display();
-      const panel = plugin.settingsTab!.containerEl.children.find(
+      const container = renderSettingsTab(plugin.settingsTab);
+      const panel = container.children.find(
         (child) => child.id === "de-law-jurisdiction-panel-switzerland",
       )!;
       const table = panel.children.find((child) => child.className === "de-law-settings-supported-table")!;

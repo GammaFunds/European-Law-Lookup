@@ -1,9 +1,9 @@
 {
   "id": "german-law-lookup",
   "name": "European Law Lookup",
-  "version": "0.4.2",
-  "minAppVersion": "1.8.0",
-  "description": "Look up legal text from the European Union, Germany, Austria, and Switzerland in Obsidian. Supports EU law in 24 official languages plus selected German, Austrian, and Swiss laws from official sources.",
+  "version": "0.4.3",
+  "minAppVersion": "1.13.0",
+  "description": "Look up legal text from the European Union, Germany, Austria, and Switzerland. Supports EU law in 24 official languages plus selected German, Austrian, and Swiss laws from official sources.",
   "author": "GammaFunds",
   "authorUrl": "https://github.com/GammaFunds",
   "isDesktopOnly": false

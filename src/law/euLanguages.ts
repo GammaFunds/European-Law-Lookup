@@ -35,7 +35,9 @@ export function isEuLawLanguageCode(value: unknown): value is string {
   return typeof value === "string" && EU_LANGUAGE_CODE_PATTERN.test(value);
 }
 
-export function isEuCellarLanguageCode(value: unknown): value is string {
+export function isEuCellarLanguageCode(value: string): boolean;
+export function isEuCellarLanguageCode(value: unknown): value is string;
+export function isEuCellarLanguageCode(value: unknown): boolean {
   return typeof value === "string" && EU_CELLAR_LANGUAGE_CODE_PATTERN.test(value);
 }
 
