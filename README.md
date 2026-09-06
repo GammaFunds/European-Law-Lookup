@@ -7,7 +7,7 @@ Look up supported EU regulations, directives, and decisions by human-readable ci
 ## Highlights
 
 - **EU-first legal lookup** for supported sector-3 regulations, directives, and decisions.
-- **Human-readable EU citations** such as `Richtlinie 2011/61/EU Art. 1` and `Verordnung (EU) 2024/3110 Art. 1`.
+- **Human-readable EU citations** such as `Art. 1 Directive 2011/61/EU` and `Art. 1 Regulation (EU) 2024/3110`.
 - **Direct CELEX lookup** such as `32016R0679 Art. 1`.
 - **24 official EU languages** for official EU legal text when the requested language expression is available.
 - **Germany, Austria, and Switzerland** remain available as additional jurisdictions.
