@@ -34,6 +34,16 @@
   border-color: var(--interactive-accent);
 }
 
+.de-law-selected-law-status {
+  flex: 1 0 100%;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+.de-law-selected-law-status::first-letter {
+  color: var(--text-success, var(--interactive-accent));
+}
+
 .de-law-lookup-result {
   min-height: 72px;
   padding: 14px 16px;

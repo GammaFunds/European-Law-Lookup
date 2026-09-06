@@ -28,6 +28,7 @@ export interface UiStrings extends UiPresentationStrings {
   supportedLawsDescription: string;
   sectionReferences: string;
   articleReferences: string;
+  selectedLawContinueWithReference: string;
   intentionallyUnsupportedCandidates: string;
   ggArticleOnlyNote: string;
   unsupportedCandidatesNote: string;
