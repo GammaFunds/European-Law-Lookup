@@ -253,11 +253,12 @@ function makeAutocompleteEuIndex() {
         documentType: "R",
         year: "2024",
         number: "1689",
-        titlesByLanguage: {
-          eng: "Artificial Intelligence Act",
-          deu: "Verordnung über künstliche Intelligenz",
-        },
-        availableLanguages: ["eng", "deu"],
+        titlesByLanguage: {},
+        availableLanguages: [
+          "bul", "spa", "ces", "dan", "deu", "est", "ell", "eng",
+          "fra", "gle", "hrv", "ita", "lav", "lit", "hun", "mlt",
+          "nld", "pol", "por", "ron", "slk", "slv", "fin", "swe",
+        ],
       }],
     ]),
   };
