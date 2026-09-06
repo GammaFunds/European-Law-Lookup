@@ -195,7 +195,7 @@ const euActAliasList: string[] = [];
 for (const entry of EU_ACTS) {
   euActsByCelex.set(entry.celex, entry);
   for (const alias of entry.aliases) {
-    euActsByLawCode.set(alias, entry);
+    euActsByLawCode.set(alias.toUpperCase(), entry);
     euActAliasList.push(alias);
   }
 }
