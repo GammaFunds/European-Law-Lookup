@@ -29,7 +29,7 @@ const EU_ACTS: readonly EuActEntry[] = [
     celex: "32024R1689",
     documentType: "R",
     canonicalLawCode: "AIACT",
-    aliases: ["AIACT", "AI_ACT", "AIA", "AI-ACT", "AI ACT", "EU AI ACT", "AI-GESETZ", "KI-VO", "AI-VO"],
+    aliases: ["AIACT", "AI_ACT", "AIA", "AI-ACT", "AI ACT", "EU AI ACT", "Artificial Intelligence Act", "AI-GESETZ", "KI-VO", "AI-VO"],
     officialTitle: "Regulation (EU) 2024/1689",
   },
   {
@@ -195,7 +195,7 @@ const euActAliasList: string[] = [];
 for (const entry of EU_ACTS) {
   euActsByCelex.set(entry.celex, entry);
   for (const alias of entry.aliases) {
-    euActsByLawCode.set(alias, entry);
+    euActsByLawCode.set(alias.toUpperCase(), entry);
     euActAliasList.push(alias);
   }
 }
