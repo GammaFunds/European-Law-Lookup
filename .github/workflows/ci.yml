@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "feature/law-title-autocomplete-v1"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v4.2.2
+      - name: Check out candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      # actions/setup-node v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Check diff whitespace
+        run: git diff --check
+
+      # actions/upload-artifact v4.6.2
+      - name: Upload generated main.js
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: generated-main-js
+          path: main.js
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Verify committed generated artifacts
+        run: |
+          set -euo pipefail
+          cmp <(git show HEAD:main.js) main.js
+          cmp <(git show HEAD:manifest.json) manifest.json
+          cmp <(git show HEAD:styles.css) styles.css
+          git diff --quiet
+          git diff --cached --quiet
+          test -z "$(git ls-files --others --exclude-standard)"
