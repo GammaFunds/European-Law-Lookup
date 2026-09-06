@@ -158,12 +158,12 @@ function suggestionForAlias(
 
 function parseEuStructuredQuery(query: string): EuStructuredQuery | null {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ");
-  const generic = /^(\d{4})(?:\s*[/\-]\s*|\s+)(\d{1,6})$/u.exec(normalized);
+  const generic = /^(\d{4})(?:\s*[/-]\s*|\s+)(\d{1,6})$/u.exec(normalized);
   if (generic) {
     return { documentType: null, year: generic[1], number: generic[2] };
   }
 
-  const typed = /^(.+?)\s+(\d{4})(?:(?:\s*[/\-]\s*|\s+)(\d{1,6}))?$/u.exec(normalized);
+  const typed = /^(.+?)\s+(\d{4})(?:(?:\s*[/-]\s*|\s+)(\d{1,6}))?$/u.exec(normalized);
   if (!typed) return null;
   const documentType = euDocumentTypeForSearchLabel(typed[1]);
   if (!documentType) return null;
