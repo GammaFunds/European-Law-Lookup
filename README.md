@@ -41,10 +41,11 @@ The current lookup workflow is article-oriented.
 
 Human-readable references:
 
-- `Richtlinie 2011/61/EU Art. 1`
-- `Verordnung (EU) 2024/3110 Art. 1`
-- `Art. 6 DSGVO`
-- `GDPR Art. 6`
+- `Art. 1 Directive 2011/61/EU`
+- `Art. 1 Regulation (EU) 2024/3110`
+- `Art. 6 GDPR`
+
+The act type (`Regulation`, `Directive`, or `Decision`) can be written in any of the EU's 24 official languages.
 
 Direct CELEX references:
 
