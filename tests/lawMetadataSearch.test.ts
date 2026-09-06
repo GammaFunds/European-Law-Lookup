@@ -249,23 +249,28 @@ class FakeElement {
   listeners: Record<string, Listener[]> = {};
   text = "";
   value = "";
+  cls = "";
 
-  createEl(_tag: string, options?: { text?: string; value?: string }): FakeElement {
+  createEl(_tag: string, options?: { text?: string; value?: string; cls?: string }): FakeElement {
     const child = new FakeElement();
     child.text = options?.text ?? "";
     child.value = options?.value ?? "";
+    child.cls = options?.cls ?? "";
     this.children.push(child);
     return child;
   }
 
-  createDiv(): FakeElement {
+  createDiv(options?: { text?: string; cls?: string }): FakeElement {
     const child = new FakeElement();
+    child.text = options?.text ?? "";
+    child.cls = options?.cls ?? "";
     this.children.push(child);
     return child;
   }
 
   addClass(_cls: string): void {}
-  empty(): void { this.children = []; }
+  setText(text: string): void { this.text = text; }
+  empty(): void { this.children = []; this.text = ""; }
   addEventListener(type: string, listener: Listener): void { (this.listeners[type] ??= []).push(listener); }
   fire(type: string, event?: { key?: string }): void { for (const listener of this.listeners[type] ?? []) listener(event); }
 }
@@ -349,7 +354,13 @@ const { LawLookupModal } = loadWithObsidianStub(
 };
 
 const ui = new Proxy({}, {
-  get: (_target, property) => String(property),
+  get: (_target, property) => property === "selectedLawContinueWithReference"
+    ? "{law} selected. Now enter {reference}."
+    : property === "articleReferences"
+      ? "Article references"
+      : property === "sectionReferences"
+        ? "Section references"
+        : String(property),
 }) as Record<string, string>;
 
 function makeAutocompleteEuIndex() {
@@ -407,6 +418,12 @@ function suggestionsFor(formEl: FakeElement): FakeElement {
   return suggestions;
 }
 
+function selectedLawStatusFor(formEl: FakeElement): FakeElement {
+  const status = formEl.children[4];
+  assert.ok(status, "expected selected-law status container");
+  return status;
+}
+
 describe("LawLookupModal metadata autocomplete integration", () => {
   it("renders EU title suggestions while typing without calling a provider", () => {
     const harness = buildAutocompleteModalHarness("EU");
@@ -431,6 +448,58 @@ describe("LawLookupModal metadata autocomplete integration", () => {
     assert.equal(harness.inputEl.value, "32024R1689 ");
     assert.equal(harness.requests.length, 0);
     assert.equal(suggestions.children.length, 0);
+  });
+
+  it("shows the selected human-readable EU law title and reference guidance", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "artificial";
+    harness.inputEl.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+
+    const status = selectedLawStatusFor(harness.formEl);
+    assert.equal(harness.inputEl.value, "32024R1689 ");
+    assert.match(status.text, /✓/u);
+    assert.match(status.text, /Artificial Intelligence Act/u);
+    assert.match(status.text, /Article references/u);
+    assert.equal(status.cls, "de-law-selected-law-status");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("keeps the selected-law confirmation while appending an article", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "artificial";
+    harness.inputEl.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+
+    harness.inputEl.value = "32024R1689 Art. 1";
+    harness.inputEl.fire("input");
+
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Artificial Intelligence Act/u);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("clears the selected-law confirmation when the canonical prefix changes", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "artificial";
+    harness.inputEl.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+
+    harness.inputEl.value = "32024R0001 Art. 1";
+    harness.inputEl.fire("input");
+
+    assert.equal(selectedLawStatusFor(harness.formEl).text, "");
+  });
+
+  it("clears the selected-law confirmation when jurisdiction changes", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "artificial";
+    harness.inputEl.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+
+    assert.equal(selectedLawStatusFor(harness.formEl).text, "");
   });
 
   it("recomputes suggestions on jurisdiction change instead of retaining stale EU results", () => {

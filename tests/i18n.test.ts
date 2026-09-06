@@ -17,6 +17,7 @@ const REQUIRED_UI_STRING_KEYS = [
   "commandName", "enableLocalLawTextCache", "enableLocalLawTextCacheDescription", "defaultLawTextSource",
   "germanOfficialText", "englishTranslationWhenAvailable", "cacheExpirationInDays", "cacheExpirationInDaysDescription",
   "noExpirationPlaceholder", "supportedLaws", "supportedLawsDescription", "sectionReferences", "articleReferences",
+  "selectedLawContinueWithReference",
   "intentionallyUnsupportedCandidates", "ggArticleOnlyNote", "unsupportedCandidatesNote", "code", "law", "referenceType",
   "examples", "lookUpLawTitle", "lawReferencePlaceholder", "lookUpLawButton", "noLookupRunYet", "noRecognizedCitation",
   "lookingUpLaw", "noCitationFound", "useEnglishTranslationWhenAvailable", "englishTranslationUnavailableForCitation",
@@ -133,6 +134,15 @@ describe("ui i18n", () => {
     const expected = [...REQUIRED_UI_STRING_KEYS].sort();
     for (const code of UI_LANGUAGE_CODES) {
       assert.deepEqual(Object.keys(getUiStrings(code)).sort(), expected, code);
+    }
+  });
+
+  it("localizes selected-law guidance with both required placeholders", () => {
+    for (const code of UI_LANGUAGE_CODES) {
+      const template = (getUiStrings(code) as unknown as Record<string, string>).selectedLawContinueWithReference;
+      assert.equal(typeof template, "string", `${code} selected-law guidance`);
+      assert.match(template, /\{law\}/u, `${code} selected-law guidance law placeholder`);
+      assert.match(template, /\{reference\}/u, `${code} selected-law guidance reference placeholder`);
     }
   });
 

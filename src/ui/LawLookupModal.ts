@@ -54,6 +54,7 @@ const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
 export class LawLookupModal extends Modal {
   private inputEl!: HTMLInputElement;
   private suggestionsEl!: HTMLElement;
+  private selectedLawStatusEl!: HTMLElement;
   private resultEl!: HTMLElement;
   private actionsEl!: HTMLElement;
   private currentSection: LawSection | null = null;
@@ -63,6 +64,7 @@ export class LawLookupModal extends Modal {
   private selectedEuLanguage: EuLawLanguage = "de";
   private selectedEuCellarLanguage: string = "deu";
   private selectedChLanguage: FedlexLanguage = "de";
+  private selectedLaw: LawMetadataSuggestion | null = null;
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
 
@@ -89,6 +91,10 @@ export class LawLookupModal extends Modal {
       placeholder: this.ui.lawReferencePlaceholder,
     });
     this.inputEl.addEventListener("input", () => {
+      if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) {
+        this.selectedLaw = null;
+        this.renderSelectedLawStatus();
+      }
       this.renderMetadataSuggestions();
     });
     this.inputEl.addEventListener("keydown", (event) => {
@@ -115,6 +121,8 @@ export class LawLookupModal extends Modal {
     jurisdictionSelect.createEl("option", { value: "EU", text: this.ui.jurisdictionEuropeanUnion });
     jurisdictionSelect.addEventListener("change", () => {
       this.selectedJurisdiction = jurisdictionSelect.value as LawJurisdiction;
+      this.selectedLaw = null;
+      this.renderSelectedLawStatus();
       this.renderActions();
       if (this.inputEl?.value.trim()) {
         void this.renderParsedReference();
@@ -128,6 +136,8 @@ export class LawLookupModal extends Modal {
     });
 
     this.suggestionsEl = formEl.createDiv({ cls: "de-law-lookup-suggestions" });
+    this.selectedLawStatusEl = formEl.createDiv({ cls: "de-law-selected-law-status" });
+    this.renderSelectedLawStatus();
     this.resultEl = contentEl.createDiv({ cls: "de-law-lookup-result" });
     this.renderResultMessage(this.ui.noLookupRunYet);
     this.actionsEl = contentEl.createDiv({ cls: "de-law-lookup-actions" });
@@ -212,8 +222,29 @@ export class LawLookupModal extends Modal {
       button.addEventListener("click", () => {
         this.inputEl.value = `${suggestion.canonicalInput} `;
         this.suggestionsEl.empty();
+        this.selectedLaw = suggestion;
+        this.renderSelectedLawStatus();
       });
     }
+  }
+
+  private inputStillHasSelectedLawPrefix(): boolean {
+    return this.selectedLaw !== null
+      && this.inputEl.value.startsWith(`${this.selectedLaw.canonicalInput} `);
+  }
+
+  private renderSelectedLawStatus(): void {
+    if (!this.selectedLawStatusEl) return;
+    this.selectedLawStatusEl.empty();
+    if (!this.selectedLaw) return;
+
+    const reference = this.selectedJurisdiction === "EU" || this.selectedJurisdiction === "CH"
+      ? this.ui.articleReferences
+      : `${this.ui.sectionReferences} / ${this.ui.articleReferences}`;
+    const message = this.ui.selectedLawContinueWithReference
+      .replace("{law}", this.selectedLaw.title)
+      .replace("{reference}", reference);
+    this.selectedLawStatusEl.setText(`✓ ${message}`);
   }
 
   private *metadataSearchEntries(): Generator<LawMetadataSearchEntry> {
