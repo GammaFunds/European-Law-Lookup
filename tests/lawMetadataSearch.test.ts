@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
 type Jurisdiction = "DE" | "AT" | "CH" | "EU";
+type EuDocumentType = "R" | "L" | "D";
 type MatchKind = "exact-alias" | "title-prefix" | "title-contains" | "eu-technical";
 
 interface SearchEntry {
@@ -11,6 +12,7 @@ interface SearchEntry {
   aliases?: readonly string[];
   alternateTitles?: readonly string[];
   celex?: string;
+  documentType?: EuDocumentType;
   year?: string;
   number?: string;
 }
@@ -63,6 +65,7 @@ const jurisdictionEntries: SearchEntry[] = [
       "Règlement sur l’intelligence artificielle",
     ],
     celex: "32024R1689",
+    documentType: "R",
     year: "2024",
     number: "1689",
   },
@@ -101,6 +104,112 @@ describe("law metadata autocomplete", () => {
     const german = searchLawMetadata({ query: "künstliche", jurisdiction: "EU", entries: jurisdictionEntries });
     assert.equal(german[0]?.canonicalInput, "32024R1689");
     assert.equal(german[0]?.matchedTitle, "Verordnung über künstliche Intelligenz");
+  });
+
+  it("matches curated EU aliases by prefix and contains when the production index has no titles", () => {
+    const titleLessEntries: SearchEntry[] = [{
+      jurisdiction: "EU",
+      canonicalInput: "32024R1689",
+      title: "32024R1689",
+      aliases: ["AI ACT", "Artificial Intelligence Act"],
+      celex: "32024R1689",
+      documentType: "R",
+      year: "2024",
+      number: "1689",
+    }];
+
+    const prefix = searchLawMetadata({ query: "artificial", jurisdiction: "EU", entries: titleLessEntries });
+    assert.equal(prefix[0]?.canonicalInput, "32024R1689");
+    assert.equal(prefix[0]?.matchedTitle, "Artificial Intelligence Act");
+
+    const contains = searchLawMetadata({ query: "intelligence", jurisdiction: "EU", entries: titleLessEntries });
+    assert.equal(contains[0]?.canonicalInput, "32024R1689");
+    assert.equal(contains[0]?.matchedTitle, "Artificial Intelligence Act");
+  });
+
+  it("matches compact year-number forms without title metadata", () => {
+    const titleLessEntries: SearchEntry[] = [{
+      jurisdiction: "EU",
+      canonicalInput: "32024R1689",
+      title: "32024R1689",
+      celex: "32024R1689",
+      documentType: "R",
+      year: "2024",
+      number: "1689",
+    }];
+
+    for (const query of ["2024/1689", "2024 1689", "2024-1689"]) {
+      const results = searchLawMetadata({ query, jurisdiction: "EU", entries: titleLessEntries });
+      assert.deepEqual(results.map((entry) => entry.canonicalInput), ["32024R1689"], query);
+    }
+  });
+
+  it("matches localized document classes and German VO/RL abbreviations", () => {
+    const titleLessEntries: SearchEntry[] = [
+      {
+        jurisdiction: "EU",
+        canonicalInput: "32024R1689",
+        title: "32024R1689",
+        celex: "32024R1689",
+        documentType: "R",
+        year: "2024",
+        number: "1689",
+      },
+      {
+        jurisdiction: "EU",
+        canonicalInput: "32022L2555",
+        title: "32022L2555",
+        celex: "32022L2555",
+        documentType: "L",
+        year: "2022",
+        number: "2555",
+      },
+    ];
+
+    for (const query of [
+      "Verordnung 2024/1689",
+      "Regulation 2024/1689",
+      "VO 2024/1689",
+      "VO 2024 1689",
+      "VO 2024",
+    ]) {
+      const results = searchLawMetadata({ query, jurisdiction: "EU", entries: titleLessEntries });
+      assert.deepEqual(results.map((entry) => entry.canonicalInput), ["32024R1689"], query);
+    }
+
+    for (const query of [
+      "Richtlinie 2022/2555",
+      "Directive 2022/2555",
+      "RL 2022/2555",
+      "RL 2022 2555",
+      "RL 2022",
+    ]) {
+      const results = searchLawMetadata({ query, jurisdiction: "EU", entries: titleLessEntries });
+      assert.deepEqual(results.map((entry) => entry.canonicalInput), ["32022L2555"], query);
+    }
+  });
+
+  it("keeps year-number ambiguity fail-safe and lets VO/RL filter by document type", () => {
+    const ambiguousEntries: SearchEntry[] = [
+      { jurisdiction: "EU", canonicalInput: "32024R0042", title: "32024R0042", celex: "32024R0042", documentType: "R", year: "2024", number: "0042" },
+      { jurisdiction: "EU", canonicalInput: "32024L0042", title: "32024L0042", celex: "32024L0042", documentType: "L", year: "2024", number: "0042" },
+      { jurisdiction: "EU", canonicalInput: "32024D0042", title: "32024D0042", celex: "32024D0042", documentType: "D", year: "2024", number: "0042" },
+    ];
+
+    const generic = searchLawMetadata({ query: "2024 42", jurisdiction: "EU", entries: ambiguousEntries });
+    assert.deepEqual(
+      new Set(generic.map((entry) => entry.canonicalInput)),
+      new Set(["32024R0042", "32024L0042", "32024D0042"]),
+    );
+
+    assert.deepEqual(
+      searchLawMetadata({ query: "VO 2024 42", jurisdiction: "EU", entries: ambiguousEntries }).map((entry) => entry.canonicalInput),
+      ["32024R0042"],
+    );
+    assert.deepEqual(
+      searchLawMetadata({ query: "RL 2024 42", jurisdiction: "EU", entries: ambiguousEntries }).map((entry) => entry.canonicalInput),
+      ["32024L0042"],
+    );
   });
 
   it("ranks exact aliases before title prefixes, title contains, and EU technical identity", () => {
