@@ -175,6 +175,19 @@ export function supportedEuHumanCitationLanguages(): readonly EuLawLanguage[] {
   return Object.keys(EU_HUMAN_CITATION_TOKENS).sort() as EuLawLanguage[];
 }
 
+export function euDocumentTypeForHumanCitationActLabel(label: string): EuDocumentType | null {
+  const normalizedLabel = normalizeToken(label);
+  let matchedType: EuDocumentType | null = null;
+  for (const tokens of Object.values(EU_HUMAN_CITATION_TOKENS)) {
+    for (const [type, actLabel] of Object.entries(tokens.actLabels) as [EuDocumentType, string][]) {
+      if (normalizeToken(actLabel) !== normalizedLabel) continue;
+      if (matchedType && matchedType !== type) return null;
+      matchedType = type;
+    }
+  }
+  return matchedType;
+}
+
 function padEuActNumber(number: string): string | null {
   if (!/^\d{1,6}$/.test(number)) return null;
   const numeric = Number(number);
