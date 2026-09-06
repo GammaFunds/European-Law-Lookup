@@ -4,6 +4,10 @@
 
 Look up supported EU regulations, directives, and decisions by human-readable citation or CELEX identifier, choose from the 24 official EU languages, preview the retrieved legal text and source information, and insert the formatted result into your active note only when you explicitly confirm the insertion.
 
+## Demo
+
+![European Law Lookup demo](assets/german-law-lookup-demo.gif)
+
 ## Highlights
 
 - **EU-first legal lookup** for supported sector-3 regulations, directives, and decisions.
@@ -16,10 +20,6 @@ Look up supported EU regulations, directives, and decisions by human-readable ci
 - **Source-aware metadata** for citations, retrieval dates, jurisdiction, language, cache state, and source status where available.
 - **Local caching** of successful legal-text lookups.
 - **No AI-generated legal text and no machine-generated translations.**
-
-## Demo
-
-![European Law Lookup demo](assets/german-law-lookup-demo.gif)
 
 ## European Union
 
