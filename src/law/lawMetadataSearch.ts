@@ -31,7 +31,7 @@ interface RankedSuggestion {
 export function searchLawMetadata(params: {
   query: string;
   jurisdiction: LawMetadataJurisdiction;
-  entries: readonly LawMetadataSearchEntry[];
+  entries: Iterable<LawMetadataSearchEntry>;
   limit?: number;
 }): LawMetadataSuggestion[] {
   const normalizedQuery = normalize(params.query);
@@ -46,32 +46,32 @@ export function searchLawMetadata(params: {
 
     const aliases = [entry.canonicalInput, ...(entry.aliases ?? [])];
     if (aliases.some((alias) => normalize(alias) === normalizedQuery)) {
-      ranked.push({
+      addRanked(ranked, {
         rank: 1,
         sortKey: suggestionSortKey(entry),
         suggestion: { ...entry, matchKind: "exact-alias" },
-      });
+      }, limit);
       continue;
     }
 
     const titles = [entry.title, ...(entry.alternateTitles ?? [])];
     const prefixTitle = titles.find((title) => normalize(title).startsWith(normalizedQuery));
     if (prefixTitle) {
-      ranked.push({
+      addRanked(ranked, {
         rank: 2,
         sortKey: suggestionSortKey(entry, prefixTitle),
         suggestion: { ...entry, matchKind: "title-prefix", matchedTitle: prefixTitle },
-      });
+      }, limit);
       continue;
     }
 
     const containingTitle = titles.find((title) => normalize(title).includes(normalizedQuery));
     if (containingTitle) {
-      ranked.push({
+      addRanked(ranked, {
         rank: 3,
         sortKey: suggestionSortKey(entry, containingTitle),
         suggestion: { ...entry, matchKind: "title-contains", matchedTitle: containingTitle },
-      });
+      }, limit);
       continue;
     }
 
@@ -81,22 +81,29 @@ export function searchLawMetadata(params: {
         .filter((value): value is string => typeof value === "string")
         .some((value) => normalize(value).includes(normalizedQuery))
     ) {
-      ranked.push({
+      addRanked(ranked, {
         rank: 4,
         sortKey: suggestionSortKey(entry),
         suggestion: { ...entry, matchKind: "eu-technical" },
-      });
+      }, limit);
     }
   }
 
-  ranked.sort((left, right) => {
-    if (left.rank !== right.rank) return left.rank - right.rank;
-    if (left.sortKey < right.sortKey) return -1;
-    if (left.sortKey > right.sortKey) return 1;
-    return 0;
-  });
+  return ranked.map(({ suggestion }) => suggestion);
+}
 
-  return ranked.slice(0, limit).map(({ suggestion }) => suggestion);
+function addRanked(ranked: RankedSuggestion[], candidate: RankedSuggestion, limit: number): void {
+  const insertAt = ranked.findIndex((entry) => compareRanked(candidate, entry) < 0);
+  if (insertAt === -1) ranked.push(candidate);
+  else ranked.splice(insertAt, 0, candidate);
+  if (ranked.length > limit) ranked.pop();
+}
+
+function compareRanked(left: RankedSuggestion, right: RankedSuggestion): number {
+  if (left.rank !== right.rank) return left.rank - right.rank;
+  if (left.sortKey < right.sortKey) return -1;
+  if (left.sortKey > right.sortKey) return 1;
+  return 0;
 }
 
 function normalize(value: string): string {
