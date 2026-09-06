@@ -13,13 +13,27 @@ import { buildLawSectionPreviewModel } from "./lawSectionPreview";
 import {
   EuActLanguageExpressionUnavailableError,
 } from "../law/providers/eurLexMapping";
-import { indexEntryForCelex, type EuActIndex, type EuActIndexEntry } from "../law/euActIndex";
+import {
+  euActIndexEntryOfficialTitle,
+  indexEntryForCelex,
+  type EuActIndex,
+  type EuActIndexEntry,
+} from "../law/euActIndex";
 import {
   cellarCodeToLegacyEuLawLanguage,
   cellarLanguageNativeName,
   legacyEuLawLanguageToCellarCode,
 } from "../law/euLanguages";
 import type { FedlexLanguage } from "../law/providers/fedlexMapping";
+import { getSupportedFedlexLaws } from "../law/providers/fedlexMapping";
+import { getSupportedGesetzeImInternetLaws } from "../law/providers/gesetzeImInternetMapping";
+import { getSupportedRisLaws } from "../law/providers/risMapping";
+import { EU_ACT_ALIASES, euActForLawCode } from "../law/euActRegistry";
+import {
+  searchLawMetadata,
+  type LawMetadataSearchEntry,
+  type LawMetadataSuggestion,
+} from "../law/lawMetadataSearch";
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
@@ -35,8 +49,11 @@ export interface LawLookupModalIndexProvider {
   getEuActIndex(): EuActIndex | null;
 }
 
+const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
+
 export class LawLookupModal extends Modal {
   private inputEl!: HTMLInputElement;
+  private suggestionsEl!: HTMLElement;
   private resultEl!: HTMLElement;
   private actionsEl!: HTMLElement;
   private currentSection: LawSection | null = null;
@@ -71,6 +88,9 @@ export class LawLookupModal extends Modal {
       type: "text",
       placeholder: this.ui.lawReferencePlaceholder,
     });
+    this.inputEl.addEventListener("input", () => {
+      this.renderMetadataSuggestions();
+    });
     this.inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.renderParsedReference();
@@ -99,6 +119,7 @@ export class LawLookupModal extends Modal {
       if (this.inputEl?.value.trim()) {
         void this.renderParsedReference();
       }
+      this.renderMetadataSuggestions();
     });
 
     const searchButton = formEl.createEl("button", { text: this.ui.lookUpLawButton });
@@ -106,6 +127,7 @@ export class LawLookupModal extends Modal {
       void this.renderParsedReference();
     });
 
+    this.suggestionsEl = formEl.createDiv({ cls: "de-law-lookup-suggestions" });
     this.resultEl = contentEl.createDiv({ cls: "de-law-lookup-result" });
     this.renderResultMessage(this.ui.noLookupRunYet);
     this.actionsEl = contentEl.createDiv({ cls: "de-law-lookup-actions" });
@@ -123,6 +145,7 @@ export class LawLookupModal extends Modal {
   }
 
   private async renderParsedReference() {
+    this.suggestionsEl?.empty();
     const lookupId = this.lookupSequence.next();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
       this.inputEl.value,
@@ -170,6 +193,93 @@ export class LawLookupModal extends Modal {
               : this.ui.unexpectedLookupFailure,
       );
     }
+  }
+
+  private renderMetadataSuggestions(): void {
+    this.suggestionsEl.empty();
+    const suggestions = searchLawMetadata({
+      query: this.inputEl.value,
+      jurisdiction: this.selectedJurisdiction,
+      entries: this.metadataSearchEntries(),
+    });
+
+    for (const suggestion of suggestions) {
+      const button = this.suggestionsEl.createEl("button", {
+        cls: "de-law-lookup-suggestion",
+        type: "button",
+        text: this.metadataSuggestionLabel(suggestion),
+      });
+      button.addEventListener("click", () => {
+        this.inputEl.value = `${suggestion.canonicalInput} `;
+        this.suggestionsEl.empty();
+      });
+    }
+  }
+
+  private *metadataSearchEntries(): Generator<LawMetadataSearchEntry> {
+    if (this.selectedJurisdiction === "DE") {
+      for (const law of getSupportedGesetzeImInternetLaws()) {
+        yield {
+          jurisdiction: "DE",
+          canonicalInput: law.displayLawCode,
+          title: law.lawTitle,
+          aliases: [law.displayLawCode],
+        };
+      }
+      return;
+    }
+
+    if (this.selectedJurisdiction === "AT") {
+      for (const law of getSupportedRisLaws()) {
+        yield {
+          jurisdiction: "AT",
+          canonicalInput: law.displayLawCode,
+          title: law.lawTitle,
+          aliases: [law.displayLawCode],
+        };
+      }
+      return;
+    }
+
+    if (this.selectedJurisdiction === "CH") {
+      for (const law of getSupportedFedlexLaws()) {
+        yield {
+          jurisdiction: "CH",
+          canonicalInput: law.displayLawCode,
+          title: law.lawTitle,
+          aliases: [law.displayLawCode],
+          alternateTitles: Object.values(law.officialTitlesByLanguage),
+        };
+      }
+      return;
+    }
+
+    const index = this.indexProvider.getEuActIndex();
+    if (!index) return;
+    for (const entry of index.entries.values()) {
+      yield {
+        jurisdiction: "EU",
+        canonicalInput: entry.celex,
+        title: euActIndexEntryOfficialTitle(entry) ?? entry.celex,
+        aliases: EU_ALIASES_BY_CELEX.get(entry.celex) ?? [],
+        alternateTitles: Object.values(entry.titlesByLanguage),
+        celex: entry.celex,
+        year: entry.year,
+        number: entry.number,
+      };
+    }
+  }
+
+  private metadataSuggestionLabel(suggestion: LawMetadataSuggestion): string {
+    const matchedTitle = suggestion.matchedTitle ?? suggestion.title;
+    if (suggestion.jurisdiction !== "EU") {
+      return `${matchedTitle} (${suggestion.canonicalInput})`;
+    }
+
+    if (matchedTitle === suggestion.title) {
+      return `${matchedTitle} — CELEX ${suggestion.canonicalInput}`;
+    }
+    return `${matchedTitle} — ${suggestion.title} — CELEX ${suggestion.canonicalInput}`;
   }
 
   private renderActions() {
@@ -318,4 +428,16 @@ export class LawLookupModal extends Modal {
     }
     return EU_LANGUAGES.map((language) => ({ code: language.eliCode, nativeName: language.nativeName }));
   }
+}
+
+function buildEuAliasesByCelex(): ReadonlyMap<string, readonly string[]> {
+  const aliasesByCelex = new Map<string, string[]>();
+  for (const alias of EU_ACT_ALIASES) {
+    const act = euActForLawCode(alias);
+    if (!act) continue;
+    const aliases = aliasesByCelex.get(act.celex) ?? [];
+    aliases.push(alias);
+    aliasesByCelex.set(act.celex, aliases);
+  }
+  return aliasesByCelex;
 }

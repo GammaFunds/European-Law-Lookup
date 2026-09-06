@@ -1,5 +1,6 @@
 .de-law-lookup-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -10,6 +11,27 @@
 
 .de-law-jurisdiction-select {
   flex: 0 0 auto;
+}
+
+.de-law-lookup-suggestions {
+  display: flex;
+  flex: 1 0 100%;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.de-law-lookup-suggestion {
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  white-space: normal;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.de-law-lookup-suggestion:hover,
+.de-law-lookup-suggestion:focus-visible {
+  border-color: var(--interactive-accent);
 }
 
 .de-law-lookup-result {
