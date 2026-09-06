@@ -90,6 +90,7 @@ describe("euActRegistry", () => {
   it("exposes the supported EU alias set", () => {
     assert.deepEqual([...EU_ACT_ALIASES].sort(), [
       "AIA", "AI ACT", "AI-ACT", "AI_ACT", "AIACT", "AI-GESETZ", "AI-VO",
+      "Artificial Intelligence Act",
       "CER", "CER DIRECTIVE", "CRA", "CRITICAL ENTITIES RESILIENCE DIRECTIVE",
       "CROWDFUNDING REGULATION", "CYBER RESILIENCE ACT",
       "DATA ACT", "DATA_ACT", "DATA GOVERNANCE ACT",
