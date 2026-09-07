@@ -139,7 +139,7 @@ describe("settings tab rendering", () => {
     }>;
     assert.deepEqual(
       controls.map((definition) => definition.control.key),
-      ["enableLawSectionCache", "defaultEuLawLanguage", "defaultLawSourceVariant", "lawSectionCacheTtlDays"],
+      ["enableLawSectionCache", "inputLayout", "defaultJurisdiction", "defaultEuLawLanguage", "defaultLawSourceVariant", "lawSectionCacheTtlDays"],
     );
     assert.ok(definitions.some((definition) => typeof definition.render === "function"));
     assert.ok(definitions.every((definition) => typeof definition.name === "string" && definition.name.length > 0));

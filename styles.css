@@ -9,6 +9,19 @@
   flex: 1;
 }
 
+.de-law-lookup-form label {
+  flex: 0 0 100%;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.de-law-lookup-form .de-law-law-input,
+.de-law-lookup-form .de-law-reference-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
 .de-law-jurisdiction-select {
   flex: 0 0 auto;
 }
@@ -126,6 +139,13 @@
 .de-law-settings-supported-description {
   margin: 0 0 16px;
   color: var(--text-muted);
+}
+
+.setting-item:has(.de-law-settings-jurisdiction-tabs) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .de-law-settings-supported-table {

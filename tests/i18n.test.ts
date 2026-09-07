@@ -18,6 +18,8 @@ const REQUIRED_UI_STRING_KEYS = [
   "germanOfficialText", "englishTranslationWhenAvailable", "cacheExpirationInDays", "cacheExpirationInDaysDescription",
   "noExpirationPlaceholder", "supportedLaws", "supportedLawsDescription", "sectionReferences", "articleReferences",
   "selectedLawContinueWithReference",
+  "inputLayout", "oneLineInputLayout", "twoFieldInputLayout", "lawLegalAct", "referenceInput",
+  "defaultJurisdiction", "defaultJurisdictionDescription",
   "intentionallyUnsupportedCandidates", "ggArticleOnlyNote", "unsupportedCandidatesNote", "code", "law", "referenceType",
   "examples", "lookUpLawTitle", "lawReferencePlaceholder", "lookUpLawButton", "noLookupRunYet", "noRecognizedCitation",
   "lookingUpLaw", "noCitationFound", "useEnglishTranslationWhenAvailable", "englishTranslationUnavailableForCitation",
@@ -552,6 +554,10 @@ describe("ui i18n", () => {
   it("provides EU labels and resolves stored, locale, then German defaults", () => {
     assert.equal(getUiStrings("de").jurisdictionEuropeanUnion, "Europäische Union"); assert.equal(getUiStrings("en").jurisdictionEuropeanUnion, "European Union");
     assert.equal(defaultEuLawLanguage("fr-FR"), "fr"); assert.equal(defaultEuLawLanguage("xx", "pl"), "pl"); assert.equal(defaultEuLawLanguage("xx"), "de");
+  });
+
+  it("uses the corrected Dutch input-layout label", () => {
+    assert.equal(getUiStrings("nl").inputLayout, "Invoerlay-out");
   });
 
   it("preserves existing Germany and Austria labels", () => {
