@@ -245,17 +245,23 @@ describe("law metadata autocomplete", () => {
 type Listener = (event?: { key?: string }) => void;
 
 class FakeElement {
+  parent: FakeElement | null = null;
   children: FakeElement[] = [];
   listeners: Record<string, Listener[]> = {};
   text = "";
   value = "";
   cls = "";
+  tagName = "";
+  attributes: Record<string, string> = {};
 
-  createEl(_tag: string, options?: { text?: string; value?: string; cls?: string }): FakeElement {
+  createEl(tag: string, options?: { text?: string; value?: string; cls?: string; attr?: Record<string, string> }): FakeElement {
     const child = new FakeElement();
+    child.tagName = tag.toUpperCase();
     child.text = options?.text ?? "";
     child.value = options?.value ?? "";
     child.cls = options?.cls ?? "";
+    child.attributes = { ...options?.attr };
+    child.parent = this;
     this.children.push(child);
     return child;
   }
@@ -264,11 +270,25 @@ class FakeElement {
     const child = new FakeElement();
     child.text = options?.text ?? "";
     child.cls = options?.cls ?? "";
+    child.parent = this;
     this.children.push(child);
     return child;
   }
 
   addClass(_cls: string): void {}
+  setAttribute(name: string, value: string): void { this.attributes[name] = value; }
+  insertBefore(child: FakeElement, reference: FakeElement): void {
+    const currentIndex = this.children.indexOf(child);
+    if (currentIndex >= 0) this.children.splice(currentIndex, 1);
+    child.parent = this;
+    this.children.splice(this.children.indexOf(reference), 0, child);
+  }
+  remove(): void {
+    if (!this.parent) return;
+    const index = this.parent.children.indexOf(this);
+    if (index >= 0) this.parent.children.splice(index, 1);
+    this.parent = null;
+  }
   setText(text: string): void { this.text = text; }
   empty(): void { this.children = []; this.text = ""; }
   addEventListener(type: string, listener: Listener): void { (this.listeners[type] ??= []).push(listener); }
@@ -280,33 +300,50 @@ class FakeNotice { constructor(_message: string) {} }
 class FakeMarkdownView {}
 
 interface FakeDropdown {
+  value: string;
   addOption(value: string, text: string): void;
   setValue(value: string): FakeDropdown;
   onChange(listener: (value: string) => void | Promise<void>): void;
+  trigger(value: string): Promise<void>;
 }
 
 interface FakeToggle {
+  value: boolean;
   setValue(value: boolean): FakeToggle;
   onChange(listener: (value: boolean) => void | Promise<void>): void;
+  trigger(value: boolean): Promise<void>;
 }
 
 class FakeSetting {
-  constructor(_element: FakeElement) {}
-  setName(_name: string): FakeSetting { return this; }
+  static instances: FakeSetting[] = [];
+  name = "";
+  dropdowns: FakeDropdown[] = [];
+  toggles: FakeToggle[] = [];
+
+  constructor(_element: FakeElement) { FakeSetting.instances.push(this); }
+  setName(name: string): FakeSetting { this.name = name; return this; }
   addDropdown(configure: (dropdown: FakeDropdown) => void): FakeSetting {
+    let listener: ((value: string) => void | Promise<void>) | undefined;
     const dropdown: FakeDropdown = {
+      value: "",
       addOption: () => {},
-      setValue: () => dropdown,
-      onChange: () => {},
+      setValue: (value) => { dropdown.value = value; return dropdown; },
+      onChange: (nextListener) => { listener = nextListener; },
+      trigger: async (value) => { dropdown.value = value; await listener?.(value); },
     };
+    this.dropdowns.push(dropdown);
     configure(dropdown);
     return this;
   }
   addToggle(configure: (toggle: FakeToggle) => void): FakeSetting {
+    let listener: ((value: boolean) => void | Promise<void>) | undefined;
     const toggle: FakeToggle = {
-      setValue: () => toggle,
-      onChange: () => {},
+      value: false,
+      setValue: (value) => { toggle.value = value; return toggle; },
+      onChange: (nextListener) => { listener = nextListener; },
+      trigger: async (value) => { toggle.value = value; await listener?.(value); },
     };
+    this.toggles.push(toggle);
     configure(toggle);
     return this;
   }
@@ -347,10 +384,12 @@ function loadWithObsidianStub<T>(load: () => T): T {
   }
 }
 
-const { LawLookupModal } = loadWithObsidianStub(
+const { LawLookupModal, composeSplitLookupInput, decomposeOneLineLookupInput } = loadWithObsidianStub(
   () => require("../src/ui/LawLookupModal"),
 ) as {
-  LawLookupModal: new (...args: unknown[]) => { onOpen(): void; contentEl: FakeElement };
+  LawLookupModal: new (...args: unknown[]) => { onOpen(): void; setInputLayout(layout: string): boolean; contentEl: FakeElement };
+  composeSplitLookupInput: (law: string, reference: string) => string;
+  decomposeOneLineLookupInput: (input: string, jurisdiction: Jurisdiction) => { law: string; reference: string } | null;
 };
 
 const ui = new Proxy({}, {
@@ -384,8 +423,16 @@ function makeAutocompleteEuIndex() {
   };
 }
 
-function buildAutocompleteModalHarness(jurisdiction: Jurisdiction) {
+function buildAutocompleteModalHarness(
+  jurisdiction: Jurisdiction,
+  inputLayout = "single",
+  defaultJurisdiction: Jurisdiction = "EU",
+) {
+  FakeSetting.instances = [];
   const requests: unknown[] = [];
+  let defaultSourceVariant = "official-de";
+  let persistedEuLanguage = "en";
+  let persistedChLanguage = "de";
   const providerRegistry = {
     getSection: async (reference: unknown) => {
       requests.push(reference);
@@ -393,38 +440,109 @@ function buildAutocompleteModalHarness(jurisdiction: Jurisdiction) {
     },
   };
   const settingsStore = {
-    getDefaultLawSourceVariant: () => "official-de",
-    getDefaultEuLawLanguage: () => "en",
-    setDefaultEuLawLanguage: async () => {},
-    getDefaultChLawLanguage: () => "de",
-    setDefaultChLawLanguage: async () => {},
+    getDefaultLawSourceVariant: () => defaultSourceVariant,
+    setDefaultLawSourceVariant: async (value: string) => { defaultSourceVariant = value; },
+    getDefaultJurisdiction: () => defaultJurisdiction,
+    getDefaultEuLawLanguage: () => persistedEuLanguage,
+    setDefaultEuLawLanguage: async (value: string) => { persistedEuLanguage = value; },
+    getDefaultChLawLanguage: () => persistedChLanguage,
+    setDefaultChLawLanguage: async (value: string) => { persistedChLanguage = value; },
     getShowInsertedSourceMetadata: () => true,
     setShowInsertedSourceMetadata: async () => {},
+    getInputLayout: () => inputLayout,
   };
   const indexProvider = { getEuActIndex: () => makeAutocompleteEuIndex() };
   const modal = new LawLookupModal({}, providerRegistry, settingsStore, ui, indexProvider);
   modal.onOpen();
   const formEl = modal.contentEl.children[1];
-  const inputEl = formEl.children[0];
-  const jurisdictionSelect = formEl.children[1];
-  jurisdictionSelect.value = jurisdiction;
-  jurisdictionSelect.fire("change");
-  return { requests, formEl, inputEl, jurisdictionSelect };
+  const inputEl = formEl.children.find((child) => child.tagName === "INPUT" && child.cls === "")!;
+  const jurisdictionSelect = formEl.children.find((child) => child.tagName === "SELECT")!;
+  if (jurisdiction !== defaultJurisdiction) {
+    jurisdictionSelect.value = jurisdiction;
+    jurisdictionSelect.fire("change");
+  }
+  return { requests, formEl, inputEl, jurisdictionSelect, modal, settingsStore };
 }
 
 function suggestionsFor(formEl: FakeElement): FakeElement {
-  const suggestions = formEl.children[3];
+  const suggestions = formEl.children.find((child) => child.cls === "de-law-lookup-suggestions");
   assert.ok(suggestions, "expected autocomplete suggestions container");
   return suggestions;
 }
 
 function selectedLawStatusFor(formEl: FakeElement): FakeElement {
-  const status = formEl.children[4];
+  const status = formEl.children.find((child) => child.cls === "de-law-selected-law-status");
   assert.ok(status, "expected selected-law status container");
   return status;
 }
 
 describe("LawLookupModal metadata autocomplete integration", () => {
+  it("persists the DE source choice and restores it in a fresh modal", async () => {
+    const harness = buildAutocompleteModalHarness("DE", "single", "DE");
+    const sourceSetting = FakeSetting.instances.find((setting) => setting.name === "useEnglishTranslationWhenAvailable");
+    assert.ok(sourceSetting?.toggles[0], "expected DE source toggle");
+
+    await sourceSetting.toggles[0].trigger(true);
+    assert.equal(harness.settingsStore.getDefaultLawSourceVariant(), "translation-en");
+    assert.equal(harness.requests.length, 0);
+
+    FakeSetting.instances = [];
+    const reopened = new LawLookupModal(
+      {},
+      { getSection: async () => { throw new Error("provider must not be called"); } },
+      harness.settingsStore,
+      ui,
+      { getEuActIndex: () => makeAutocompleteEuIndex() },
+    );
+    reopened.onOpen();
+    const reopenedSetting = FakeSetting.instances.find((setting) => setting.name === "useEnglishTranslationWhenAvailable");
+    assert.equal(reopenedSetting?.toggles[0]?.value, true);
+  });
+
+  it("persists EU language selection directly through the settings setter", async () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    const languageSetting = FakeSetting.instances.find((setting) => setting.name === "euTextLanguage");
+    assert.ok(languageSetting?.dropdowns[0], "expected EU language dropdown");
+
+    await languageSetting.dropdowns[0].trigger("fra");
+    assert.equal(harness.settingsStore.getDefaultEuLawLanguage(), "fr");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("opens with the persisted jurisdiction and keeps the required option order without lookup", () => {
+    const harness = buildAutocompleteModalHarness("CH", "single", "CH");
+    assert.deepEqual(harness.jurisdictionSelect.children.map((option) => option.value), ["EU", "DE", "AT", "CH"]);
+    assert.equal(harness.jurisdictionSelect.value, "CH");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("shows language controls only for jurisdictions with multiple choices", () => {
+    const controlsFor = (jurisdiction: Jurisdiction): { dropdowns: number; toggles: number } => {
+      const harness = buildAutocompleteModalHarness("EU");
+      if (jurisdiction !== "EU") {
+        FakeSetting.instances = [];
+        harness.jurisdictionSelect.value = jurisdiction;
+        harness.jurisdictionSelect.fire("change");
+      }
+      const latestByName = new Map<string, FakeSetting>();
+      for (const setting of FakeSetting.instances) {
+        if (["euTextLanguage", "swissOfficialTextLanguage", "useEnglishTranslationWhenAvailable"].includes(setting.name)) {
+          latestByName.set(setting.name, setting);
+        }
+      }
+      const languageControls = [...latestByName.values()];
+      return {
+        dropdowns: languageControls.reduce((count, setting) => count + setting.dropdowns.length, 0),
+        toggles: languageControls.reduce((count, setting) => count + setting.toggles.length, 0),
+      };
+    };
+
+    assert.deepEqual(controlsFor("EU"), { dropdowns: 1, toggles: 0 });
+    assert.deepEqual(controlsFor("DE"), { dropdowns: 0, toggles: 1 });
+    assert.deepEqual(controlsFor("AT"), { dropdowns: 0, toggles: 0 });
+    assert.deepEqual(controlsFor("CH"), { dropdowns: 1, toggles: 0 });
+  });
+
   it("renders EU title suggestions while typing without calling a provider", () => {
     const harness = buildAutocompleteModalHarness("EU");
     harness.inputEl.value = "artificial";
@@ -531,5 +649,154 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       assert.ok(suggestions.children.length > 0);
       assert.match(suggestions.children[0].text, entry.expected);
     }
+  });
+});
+
+describe("LawLookupModal configurable input layout", () => {
+  it("converts an existing single-line modal state to split without lookup", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "artificial";
+    harness.inputEl.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    harness.inputEl.value = "32024R1689 Art. 1";
+    harness.inputEl.fire("input");
+
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    const referenceInput = harness.formEl.children.find((child) => child.cls === "de-law-reference-input");
+    assert.equal(lawInput?.value, "32024R1689");
+    assert.equal(referenceInput?.value, "Art. 1");
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Artificial Intelligence Act/u);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("converts an empty single-line modal to split without lookup", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    const referenceInput = harness.formEl.children.find((child) => child.cls === "de-law-reference-input");
+    assert.equal(lawInput?.value, "");
+    assert.equal(referenceInput?.value, "");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("keeps repeated empty layout transitions lossless and request-free", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    assert.equal(harness.modal.setInputLayout("single"), true);
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    assert.equal(harness.formEl.children.filter((child) => child.tagName === "INPUT").length, 2);
+    assert.equal(harness.formEl.children.find((child) => child.cls === "de-law-law-input")?.value, "");
+    assert.equal(harness.formEl.children.find((child) => child.cls === "de-law-reference-input")?.value, "");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("converts split state to one line without lookup", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    const referenceInput = harness.formEl.children.find((child) => child.cls === "de-law-reference-input");
+    assert.ok(lawInput);
+    assert.ok(referenceInput);
+    lawInput.value = "artificial";
+    lawInput.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    referenceInput.value = "Art. 1";
+
+    assert.equal(harness.modal.setInputLayout("single"), true);
+    const input = harness.formEl.children.find((child) => child.tagName === "INPUT");
+    assert.equal(input?.value, "32024R1689 Art. 1");
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Artificial Intelligence Act/u);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("rejects ambiguous single-line conversion without discarding input or inventing selection", () => {
+    const harness = buildAutocompleteModalHarness("EU");
+    harness.inputEl.value = "free-form citation without a safe law boundary";
+
+    assert.equal(harness.modal.setInputLayout("split"), false);
+    assert.equal(harness.inputEl.value, "free-form citation without a safe law boundary");
+    assert.equal(harness.formEl.children.filter((child) => child.tagName === "INPUT").length, 1);
+    assert.equal(selectedLawStatusFor(harness.formEl).text, "");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("renders separate law and reference controls in split mode", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const inputs = harness.formEl.children.filter((child) => child.tagName === "INPUT");
+    assert.equal(inputs.length, 2);
+    assert.equal(inputs[0].cls, "de-law-law-input");
+    assert.equal(inputs[1].cls, "de-law-reference-input");
+  });
+
+  it("associates each split-mode visible label with its corresponding input", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const labels = harness.formEl.children.filter((child) => child.tagName === "LABEL");
+    const inputs = harness.formEl.children.filter((child) => child.tagName === "INPUT");
+    assert.equal(labels.length, 2);
+    assert.equal(inputs.length, 2);
+    assert.equal(labels[0].attributes.for, inputs[0].attributes.id);
+    assert.equal(labels[1].attributes.for, inputs[1].attributes.id);
+    assert.notEqual(inputs[0].attributes.id, inputs[1].attributes.id);
+  });
+
+  it("selecting a split-mode law keeps provider requests at zero", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    assert.ok(lawInput);
+    lawInput.value = "artificial";
+    lawInput.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    assert.equal(harness.requests.length, 0);
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Artificial Intelligence Act/u);
+  });
+
+  it("typing a split reference does not request a provider until explicit lookup", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    const referenceInput = harness.formEl.children.find((child) => child.cls === "de-law-reference-input");
+    assert.ok(lawInput);
+    assert.ok(referenceInput);
+    lawInput.value = "artificial";
+    lawInput.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    referenceInput.value = "Art. 1";
+    referenceInput.fire("input");
+    assert.equal(harness.requests.length, 0);
+    const lookupButton = harness.formEl.children.find((child) => child.text === "lookUpLawButton");
+    assert.ok(lookupButton);
+    lookupButton.fire("click");
+    assert.equal(harness.requests.length, 1);
+  });
+
+  it("composes split references through the existing parser grammar for EU, DE, and CH", () => {
+    assert.equal(composeSplitLookupInput("32024R1689", "Art. 1"), "32024R1689 Art. 1");
+    assert.equal(composeSplitLookupInput("BGB", "§ 823"), "BGB § 823");
+    assert.equal(composeSplitLookupInput("OR", "Art. 1"), "OR Art. 1");
+  });
+
+  it("preserves safely decomposable input and rejects unsafe conversion", () => {
+    assert.deepEqual(decomposeOneLineLookupInput("32024R1689 Art. 1", "EU"), {
+      law: "32024R1689",
+      reference: "Art. 1",
+    });
+    assert.deepEqual(decomposeOneLineLookupInput("§ 823 BGB", "DE"), {
+      law: "BGB",
+      reference: "§ 823",
+    });
+    assert.equal(decomposeOneLineLookupInput("free-form citation without a safe law boundary", "EU"), null);
+  });
+
+  it("clears selected-law state when the jurisdiction changes in split mode", () => {
+    const harness = buildAutocompleteModalHarness("EU", "split");
+    const lawInput = harness.formEl.children.find((child) => child.cls === "de-law-law-input");
+    assert.ok(lawInput);
+    lawInput.value = "artificial";
+    lawInput.fire("input");
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(selectedLawStatusFor(harness.formEl).text, "");
   });
 });

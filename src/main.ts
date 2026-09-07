@@ -32,7 +32,7 @@ import {
   type OfficialTitlesByLanguage,
   type FedlexLanguage,
 } from "./law/providers/fedlexMapping";
-import type { LawSection, LawSourceVariant } from "./law/types";
+import type { LawJurisdiction, LawSection, LawSourceVariant } from "./law/types";
 import type { EuLawLanguage } from "./law/types";
 import { defaultEuLawLanguage } from "./law/euLanguages";
 import {
@@ -40,7 +40,12 @@ import {
   getUiStrings,
   type UiStrings,
 } from "./ui/i18n";
-import { LawLookupModal, type LawLookupModalIndexProvider } from "./ui/LawLookupModal";
+import {
+  LawLookupModal,
+  normalizeInputLayout,
+  type InputLayout,
+  type LawLookupModalIndexProvider,
+} from "./ui/LawLookupModal";
 import {
   parseStoredEuActIndex,
   type EuActIndex,
@@ -79,9 +84,11 @@ interface DeLawPluginSettings {
   enableLawSectionCache: boolean;
   lawSectionCacheTtlDays: number | null;
   defaultLawSourceVariant: LawSourceVariant;
+  defaultJurisdiction: LawJurisdiction;
   defaultEuLawLanguage: EuLawLanguage;
   defaultChLawLanguage: FedlexLanguage;
   showInsertedSourceMetadata: boolean;
+  inputLayout: InputLayout;
 }
 
 interface DeLawPluginData extends Partial<DeLawPluginSettings> {
@@ -96,9 +103,11 @@ const DEFAULT_SETTINGS: DeLawPluginSettings = {
   enableLawSectionCache: true,
   lawSectionCacheTtlDays: null,
   defaultLawSourceVariant: "official-de",
+  defaultJurisdiction: "EU",
   defaultEuLawLanguage: "de",
   defaultChLawLanguage: "de",
   showInsertedSourceMetadata: true,
+  inputLayout: "single",
 };
 
 export default class DeLawPlugin extends Plugin {
@@ -111,6 +120,7 @@ export default class DeLawPlugin extends Plugin {
   private dedicatedEuActIndexUnavailable = false;
   private pluginData: DeLawPluginData = {};
   private pluginDataWriteTail: Promise<void> = Promise.resolve();
+  private activeLawLookupModal: LawLookupModal | null = null;
   private readonly uiStrings = getUiStrings(safeGetObsidianLanguage());
 
   async onload() {
@@ -126,12 +136,16 @@ export default class DeLawPlugin extends Plugin {
       id: "deutsches-gesetz-nachschlagen",
       name: this.uiStrings.commandName,
       callback: () => {
-        new LawLookupModal(
+        const modal = new LawLookupModal(
           this.app,
           this.providerRegistry,
           {
             getDefaultLawSourceVariant: () =>
               this.pluginSettings.defaultLawSourceVariant,
+            setDefaultLawSourceVariant: async (value) => {
+              await this.updateSettings({ defaultLawSourceVariant: value });
+            },
+            getDefaultJurisdiction: () => this.pluginSettings.defaultJurisdiction,
             getDefaultEuLawLanguage: () => this.pluginSettings.defaultEuLawLanguage,
             setDefaultEuLawLanguage: async (value) => { await this.updateSettings({ defaultEuLawLanguage: value }); },
             getDefaultChLawLanguage: () => this.pluginSettings.defaultChLawLanguage,
@@ -141,10 +155,16 @@ export default class DeLawPlugin extends Plugin {
             setShowInsertedSourceMetadata: async (value) => {
               await this.updateSettings({ showInsertedSourceMetadata: value });
             },
+            getInputLayout: () => this.pluginSettings.inputLayout,
+            onClose: () => {
+              if (this.activeLawLookupModal === modal) this.activeLawLookupModal = null;
+            },
           },
           this.uiStrings,
           this.createIndexProvider(),
-        ).open();
+        );
+        this.activeLawLookupModal = modal;
+        modal.open();
       },
     });
 
@@ -317,7 +337,7 @@ export default class DeLawPlugin extends Plugin {
     return this.pluginSettings;
   }
 
-  getUiStrings(): UiStrings {
+  getUiStrings(): UiStrings & { defaultJurisdiction: string; defaultJurisdictionDescription: string } {
     return this.uiStrings;
   }
 
@@ -328,6 +348,9 @@ export default class DeLawPlugin extends Plugin {
     };
     await this.saveSettings();
     this.rebuildProviderRegistry();
+    if (patch.inputLayout !== undefined) {
+      this.activeLawLookupModal?.setInputLayout(this.pluginSettings.inputLayout);
+    }
   }
 
   private rebuildProviderRegistry() {
@@ -354,10 +377,12 @@ export default class DeLawPlugin extends Plugin {
         safeGetObsidianLanguage(),
         storedSettings?.defaultLawSourceVariant,
       ),
+      defaultJurisdiction: normalizeJurisdiction(storedSettings?.defaultJurisdiction),
       defaultEuLawLanguage: defaultEuLawLanguage(safeGetObsidianLanguage(), storedSettings?.defaultEuLawLanguage),
       defaultChLawLanguage: normalizeFedlexLanguage(storedSettings?.defaultChLawLanguage) ?? "de",
       showInsertedSourceMetadata:
         storedSettings?.showInsertedSourceMetadata !== false,
+      inputLayout: normalizeInputLayout(storedSettings?.inputLayout),
     };
   }
 
@@ -425,6 +450,31 @@ class DeLawSettingsTab extends PluginSettingTab {
         control: { type: "toggle", key: "enableLawSectionCache" },
       },
       {
+        name: ui.inputLayout,
+        control: {
+          type: "dropdown",
+          key: "inputLayout",
+          options: {
+            single: ui.oneLineInputLayout,
+            split: ui.twoFieldInputLayout,
+          },
+        },
+      },
+      {
+        name: ui.defaultJurisdiction,
+        desc: ui.defaultJurisdictionDescription,
+        control: {
+          type: "dropdown",
+          key: "defaultJurisdiction",
+          options: {
+            EU: ui.jurisdictionEuropeanUnion,
+            DE: ui.jurisdictionGermany,
+            AT: ui.jurisdictionAustria,
+            CH: ui.jurisdictionSwitzerland,
+          },
+        },
+      },
+      {
         name: ui.defaultEuTextLanguage,
         desc: ui.defaultEuTextLanguageDescription,
         control: {
@@ -467,6 +517,8 @@ class DeLawSettingsTab extends PluginSettingTab {
     const settings = this.plugin.getSettings();
     switch (key) {
       case "enableLawSectionCache": return settings.enableLawSectionCache;
+      case "inputLayout": return settings.inputLayout;
+      case "defaultJurisdiction": return settings.defaultJurisdiction;
       case "defaultEuLawLanguage": return settings.defaultEuLawLanguage;
       case "defaultLawSourceVariant": return settings.defaultLawSourceVariant;
       case "lawSectionCacheTtlDays": return settings.lawSectionCacheTtlDays == null ? "" : String(settings.lawSectionCacheTtlDays);
@@ -479,6 +531,12 @@ class DeLawSettingsTab extends PluginSettingTab {
       case "enableLawSectionCache":
         await this.plugin.updateSettings({ enableLawSectionCache: value === true });
         this.refreshDomState();
+        return;
+      case "inputLayout":
+        await this.plugin.updateSettings({ inputLayout: normalizeInputLayout(value) });
+        return;
+      case "defaultJurisdiction":
+        await this.plugin.updateSettings({ defaultJurisdiction: normalizeJurisdiction(value) });
         return;
       case "defaultEuLawLanguage":
         await this.plugin.updateSettings({ defaultEuLawLanguage: defaultEuLawLanguage(undefined, value) });
@@ -692,4 +750,8 @@ function normalizeTtlDays(value: unknown): number | null {
   }
 
   return parsed;
+}
+
+function normalizeJurisdiction(value: unknown): LawJurisdiction {
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" ? value : "EU";
 }

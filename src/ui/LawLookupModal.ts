@@ -37,12 +37,45 @@ import {
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
+  setDefaultLawSourceVariant?(value: LawSourceVariant): Promise<void>;
+  getDefaultJurisdiction?(): LawJurisdiction;
   getDefaultEuLawLanguage(): EuLawLanguage;
   setDefaultEuLawLanguage(value: EuLawLanguage): Promise<void>;
   getDefaultChLawLanguage?(): FedlexLanguage;
   setDefaultChLawLanguage?(value: FedlexLanguage): Promise<void>;
   getShowInsertedSourceMetadata(): boolean;
   setShowInsertedSourceMetadata(value: boolean): Promise<void>;
+  getInputLayout?(): InputLayout;
+  onClose?(): void;
+}
+
+export type InputLayout = "single" | "split";
+
+function normalizeJurisdiction(value: unknown): LawJurisdiction {
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" ? value : "EU";
+}
+
+export function normalizeInputLayout(value: unknown): InputLayout {
+  return value === "split" ? "split" : "single";
+}
+
+export function composeSplitLookupInput(law: string, reference: string): string {
+  return [law.trim(), reference.trim()].filter(Boolean).join(" ");
+}
+
+export function decomposeOneLineLookupInput(
+  input: string,
+  jurisdiction: LawJurisdiction,
+): { law: string; reference: string } | null {
+  const value = input.trim();
+  if (!value) return { law: "", reference: "" };
+  const actFirst = value.match(/^(.+?)\s+((?:§|Art\.?)[ ]*\S.*)$/u);
+  if (actFirst) return { law: actFirst[1].trim(), reference: actFirst[2].trim() };
+  if (jurisdiction === "DE" || jurisdiction === "AT" || jurisdiction === "CH") {
+    const referenceFirst = value.match(/^((?:§|Art\.?)[ ]*\S.*?)\s+([A-Z][A-Z0-9.-]*)$/u);
+    if (referenceFirst) return { law: referenceFirst[2].trim(), reference: referenceFirst[1].trim() };
+  }
+  return null;
 }
 
 export interface LawLookupModalIndexProvider {
@@ -50,23 +83,31 @@ export interface LawLookupModalIndexProvider {
 }
 
 const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
+let nextInputId = 0;
 
 export class LawLookupModal extends Modal {
   private inputEl!: HTMLInputElement;
+  private lawInputEl!: HTMLInputElement;
+  private referenceInputEl!: HTMLInputElement;
   private suggestionsEl!: HTMLElement;
   private selectedLawStatusEl!: HTMLElement;
   private resultEl!: HTMLElement;
   private actionsEl!: HTMLElement;
+  private formEl!: HTMLElement;
+  private jurisdictionSelectEl!: HTMLSelectElement;
+  private inputElements: HTMLElement[] = [];
+  private inputLabels: HTMLElement[] = [];
   private currentSection: LawSection | null = null;
   private currentMarkdown = "";
   private selectedSourceVariant: LawSourceVariant = "official-de";
-  private selectedJurisdiction: LawJurisdiction = "DE";
+  private selectedJurisdiction: LawJurisdiction = "EU";
   private selectedEuLanguage: EuLawLanguage = "de";
   private selectedEuCellarLanguage: string = "deu";
   private selectedChLanguage: FedlexLanguage = "de";
   private selectedLaw: LawMetadataSuggestion | null = null;
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
+  private inputLayout: InputLayout = "single";
 
   constructor(
     app: App,
@@ -86,25 +127,18 @@ export class LawLookupModal extends Modal {
     contentEl.createEl("h2", { text: this.ui.lookUpLawTitle });
 
     const formEl = contentEl.createDiv({ cls: "de-law-lookup-form" });
-    this.inputEl = formEl.createEl("input", {
-      type: "text",
-      placeholder: this.ui.lawReferencePlaceholder,
-    });
-    this.inputEl.addEventListener("input", () => {
-      if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) {
-        this.selectedLaw = null;
-        this.renderSelectedLawStatus();
-      }
-      this.renderMetadataSuggestions();
-    });
-    this.inputEl.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        void this.renderParsedReference();
-      }
-    });
+    this.formEl = formEl;
+    this.inputLayout = normalizeInputLayout(this.settingsStore.getInputLayout?.());
+    this.renderInputControls();
+    this.selectedJurisdiction = normalizeJurisdiction(this.settingsStore.getDefaultJurisdiction?.());
 
     const jurisdictionSelect = formEl.createEl("select", {
       cls: "de-law-jurisdiction-select",
+    });
+    this.jurisdictionSelectEl = jurisdictionSelect;
+    jurisdictionSelect.createEl("option", {
+      value: "EU",
+      text: this.ui.jurisdictionEuropeanUnion,
     });
     jurisdictionSelect.createEl("option", {
       value: "DE",
@@ -114,14 +148,15 @@ export class LawLookupModal extends Modal {
       value: "AT",
       text: this.ui.jurisdictionAustria,
     });
-    jurisdictionSelect.createEl("option", {
-      value: "CH",
-      text: this.ui.jurisdictionSwitzerland,
-    });
-    jurisdictionSelect.createEl("option", { value: "EU", text: this.ui.jurisdictionEuropeanUnion });
+    jurisdictionSelect.createEl("option", { value: "CH", text: this.ui.jurisdictionSwitzerland });
+    jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
       this.selectedJurisdiction = jurisdictionSelect.value as LawJurisdiction;
       this.selectedLaw = null;
+      if (this.inputLayout === "split") {
+        this.lawInputEl.value = "";
+        this.referenceInputEl.value = "";
+      }
       this.renderSelectedLawStatus();
       this.renderActions();
       if (this.inputEl?.value.trim()) {
@@ -152,13 +187,41 @@ export class LawLookupModal extends Modal {
 
   onClose() {
     this.contentEl.empty();
+    this.settingsStore.onClose?.();
+  }
+
+  setInputLayout(layout: InputLayout): boolean {
+    const nextLayout = normalizeInputLayout(layout);
+    if (nextLayout === this.inputLayout) return true;
+
+    let law = "";
+    let reference = "";
+    if (this.inputLayout === "single") {
+      const decomposed = decomposeOneLineLookupInput(this.inputEl.value, this.selectedJurisdiction);
+      if (!decomposed) return false;
+      law = decomposed.law;
+      reference = decomposed.reference;
+      if (this.selectedLaw?.canonicalInput !== law) this.selectedLaw = null;
+    } else {
+      law = this.lawInputValue().trim();
+      reference = this.referenceInputEl.value.trim();
+      if (this.selectedLaw?.canonicalInput !== law) this.selectedLaw = null;
+    }
+
+    const composed = nextLayout === "single" ? composeSplitLookupInput(law, reference) : "";
+    this.removeInputControls();
+    this.inputLayout = nextLayout;
+    this.renderInputControls(law, reference, composed);
+    this.renderSelectedLawStatus();
+    this.renderMetadataSuggestions();
+    return true;
   }
 
   private async renderParsedReference() {
     this.suggestionsEl?.empty();
     const lookupId = this.lookupSequence.next();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
-      this.inputEl.value,
+      this.lookupInputValue(),
       this.selectedJurisdiction,
       this.indexProvider.getEuActIndex(),
     );
@@ -208,7 +271,7 @@ export class LawLookupModal extends Modal {
   private renderMetadataSuggestions(): void {
     this.suggestionsEl.empty();
     const suggestions = searchLawMetadata({
-      query: this.inputEl.value,
+      query: this.lawInputValue(),
       jurisdiction: this.selectedJurisdiction,
       entries: this.metadataSearchEntries(),
     });
@@ -220,7 +283,11 @@ export class LawLookupModal extends Modal {
         text: this.metadataSuggestionLabel(suggestion),
       });
       button.addEventListener("click", () => {
-        this.inputEl.value = `${suggestion.canonicalInput} `;
+        if (this.inputLayout === "split") {
+          this.lawInputEl.value = suggestion.canonicalInput;
+        } else {
+          this.inputEl.value = `${suggestion.canonicalInput} `;
+        }
         this.suggestionsEl.empty();
         this.selectedLaw = suggestion;
         this.renderSelectedLawStatus();
@@ -229,8 +296,75 @@ export class LawLookupModal extends Modal {
   }
 
   private inputStillHasSelectedLawPrefix(): boolean {
-    return this.selectedLaw !== null
-      && this.inputEl.value.startsWith(`${this.selectedLaw.canonicalInput} `);
+    if (!this.selectedLaw) return false;
+    if (this.inputLayout === "split") return this.lawInputEl.value.trim() === this.selectedLaw.canonicalInput;
+    return this.inputEl.value.startsWith(`${this.selectedLaw.canonicalInput} `);
+  }
+
+  private renderInputControls(law = "", reference = "", singleValue = ""): void {
+    if (this.inputLayout === "split") {
+      const lawId = `de-law-law-input-${++nextInputId}`;
+      const referenceId = `de-law-reference-input-${++nextInputId}`;
+      const lawLabel = this.formEl.createEl("label", { text: this.ui.lawLegalAct, attr: { for: lawId } });
+      const lawInput = this.formEl.createEl("input", {
+        type: "text",
+        cls: "de-law-law-input",
+        value: law,
+        placeholder: this.ui.lawReferencePlaceholder,
+        attr: { id: lawId, "aria-label": this.ui.lawLegalAct },
+      });
+      const referenceLabel = this.formEl.createEl("label", { text: this.ui.referenceInput, attr: { for: referenceId } });
+      const referenceInput = this.formEl.createEl("input", {
+        type: "text",
+        cls: "de-law-reference-input",
+        value: reference,
+        placeholder: this.ui.articleReferences,
+        attr: { id: referenceId, "aria-label": this.ui.referenceInput },
+      });
+      this.inputLabels = [lawLabel, referenceLabel];
+      this.inputElements = [lawInput, referenceInput];
+      this.lawInputEl = lawInput;
+      this.referenceInputEl = referenceInput;
+      lawInput.addEventListener("input", () => {
+        if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) {
+          this.selectedLaw = null;
+          this.renderSelectedLawStatus();
+        }
+        this.renderMetadataSuggestions();
+      });
+      referenceInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") void this.renderParsedReference();
+      });
+    } else {
+      const input = this.formEl.createEl("input", {
+        type: "text",
+        value: singleValue,
+        placeholder: this.ui.lawReferencePlaceholder,
+      });
+      this.inputLabels = [];
+      this.inputElements = [input];
+      this.inputEl = input;
+      input.addEventListener("input", () => {
+        if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) {
+          this.selectedLaw = null;
+          this.renderSelectedLawStatus();
+        }
+        this.renderMetadataSuggestions();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") void this.renderParsedReference();
+      });
+    }
+    if (this.jurisdictionSelectEl) {
+      const controls = [...this.inputLabels, ...this.inputElements];
+      for (const control of controls) this.formEl.insertBefore(control, this.jurisdictionSelectEl);
+    }
+  }
+
+  private removeInputControls(): void {
+    for (const element of [...this.inputLabels, ...this.inputElements]) element.remove();
+    this.inputLabels = [];
+    this.inputElements = [];
   }
 
   private renderSelectedLawStatus(): void {
@@ -327,7 +461,7 @@ export class LawLookupModal extends Modal {
             this.selectedEuLanguage = legacy;
             await this.settingsStore.setDefaultEuLawLanguage(legacy);
           }
-          if (this.inputEl?.value.trim()) void this.renderParsedReference();
+          if (this.lookupInputValue().trim()) void this.renderParsedReference();
         });
       });
     } else if (this.selectedJurisdiction === "CH") {
@@ -339,14 +473,15 @@ export class LawLookupModal extends Modal {
             if (value !== "de" && value !== "fr" && value !== "it") return;
             this.selectedChLanguage = value;
             await this.settingsStore.setDefaultChLawLanguage?.(value);
-            if (this.inputEl?.value.trim()) void this.renderParsedReference();
+            if (this.lookupInputValue().trim()) void this.renderParsedReference();
           });
       });
-    } else {
+    } else if (this.selectedJurisdiction === "DE") {
       new Setting(this.actionsEl).setName(this.ui.useEnglishTranslationWhenAvailable).addToggle((toggle) => {
-        toggle.setValue(this.selectedSourceVariant === "translation-en").onChange((value) => {
+        toggle.setValue(this.selectedSourceVariant === "translation-en").onChange(async (value) => {
           this.selectedSourceVariant = value ? "translation-en" : "official-de";
-          if (this.inputEl?.value.trim()) void this.renderParsedReference();
+          await this.settingsStore.setDefaultLawSourceVariant?.(this.selectedSourceVariant);
+          if (this.lookupInputValue().trim()) void this.renderParsedReference();
         });
       });
     }
@@ -447,7 +582,7 @@ export class LawLookupModal extends Modal {
 
   private availableEuLanguagesForCurrentReference(): Array<{ code: string; nativeName: string }> {
     const index = this.indexProvider.getEuActIndex();
-    const parsed = parseLawReferenceWithSelectedJurisdiction(this.inputEl?.value ?? "", "EU", index);
+    const parsed = parseLawReferenceWithSelectedJurisdiction(this.lookupInputValue(), "EU", index);
     const celex = parsed?.euCelex;
     if (celex && index) {
       const entry: EuActIndexEntry | null = indexEntryForCelex(index, celex);
@@ -458,6 +593,17 @@ export class LawLookupModal extends Modal {
       }
     }
     return EU_LANGUAGES.map((language) => ({ code: language.eliCode, nativeName: language.nativeName }));
+  }
+
+  private lawInputValue(): string {
+    return this.inputLayout === "split" ? this.lawInputEl?.value ?? "" : this.inputEl?.value ?? "";
+  }
+
+  private lookupInputValue(): string {
+    if (this.inputLayout === "split") {
+      return composeSplitLookupInput(this.lawInputValue(), this.referenceInputEl?.value ?? "");
+    }
+    return this.inputEl?.value ?? "";
   }
 }
 
