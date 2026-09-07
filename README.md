@@ -18,6 +18,7 @@ Look up supported EU regulations, directives, and decisions by human-readable ci
 - **Official-source retrieval** from EUR-Lex / Publications Office CELLAR, Gesetze im Internet, RIS, and Fedlex.
 - **Preview before insertion** so a lookup never modifies a note without an explicit user action.
 - **Source-aware metadata** for citations, retrieval dates, jurisdiction, language, cache state, and source status where available.
+- **Configurable lookup workflow** with a one-line or two-field input layout, a default jurisdiction, and jurisdiction-specific language preferences where supported.
 - **Local caching** of successful legal-text lookups.
 - **No AI-generated legal text and no machine-generated translations.**
 
@@ -88,7 +89,7 @@ Examples:
 - `Art. 1 GG`
 - `Art. 229 § 6 EGBGB`
 
-Published English legal text is used only for explicitly configured official or published sources. If no supported English source exists, the lookup uses the configured German official-text behavior. The plugin never creates its own translation.
+For configured laws, Germany supports official German text and published English legal text where available. If no supported English source exists, the lookup uses the configured German official-text behavior. The plugin never creates its own translation.
 
 The complete supported-law catalog and example inputs are available in the plugin settings.
 
@@ -107,6 +108,8 @@ Examples:
 German and Austrian laws with the same abbreviation remain isolated by jurisdiction.
 
 RIS consolidated federal-law text is an informational, legally non-binding version and is not presented as an authentic Federal Law Gazette publication.
+
+Austria supports German legal text only, so no language selector is shown for Austrian lookups.
 
 The complete supported-law catalog is available in the plugin settings.
 
@@ -135,9 +138,9 @@ Swiss section-style references, cantonal law, and unlisted federal laws remain o
 
 1. Open the command palette.
 2. Run the law lookup command.
-3. Select the jurisdiction.
-4. Enter a supported legal reference.
-5. Select the desired legal-text language where applicable.
+3. The configured default jurisdiction may already be selected; change it if needed.
+4. Enter a supported legal reference using the configured one-line input or separate law and reference fields.
+5. Select the desired legal-text language only where multiple supported choices exist. Austria has no language selector because only German is supported.
 6. Review the legal text, citation, and source information.
 7. Insert the result into the active note.
 
