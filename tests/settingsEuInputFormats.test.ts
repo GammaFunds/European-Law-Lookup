@@ -75,7 +75,9 @@ class FakeElement {
   addEventListener(): void {}
 
   focus(): void {}
-  addClass(_className: string): void {}
+  addClass(className: string): void {
+    this.className = this.className ? `${this.className} ${className}` : className;
+  }
 }
 
 class FakeSetting {
@@ -279,8 +281,9 @@ describe("EU Settings input-format presentation", () => {
     const styles = readFileSync(resolve(__dirname, "../../styles.css"), "utf8");
     assert.match(
       styles,
-      /\.setting-item:has\(\.de-law-settings-jurisdiction-tabs\)\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*stretch;/s,
+      /\.de-law-settings-supported-setting\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*stretch;/s,
     );
+    assert.doesNotMatch(styles, /:has\(/);
   });
 
   it("defaults missing input layout data to one-line mode", async () => {
@@ -348,6 +351,7 @@ describe("EU Settings input-format presentation", () => {
     const { plugin } = loadPlugin();
     await (plugin as unknown as { onload(): Promise<void> }).onload();
     const container = renderSettingsTab(plugin.settingsTab);
+    assert.equal(container.className, "de-law-settings-supported-setting");
     const euPanel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-eu");
     assert.ok(euPanel);
     assert.equal(euPanel.children.find((child) => child.className === "de-law-settings-supported-table")?.children.length, 5);
