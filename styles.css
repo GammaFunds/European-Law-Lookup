@@ -141,7 +141,7 @@
   color: var(--text-muted);
 }
 
-.setting-item:has(.de-law-settings-jurisdiction-tabs) {
+.de-law-settings-supported-setting {
   display: flex;
   flex-direction: column;
   align-items: stretch;

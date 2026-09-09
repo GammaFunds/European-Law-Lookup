@@ -507,6 +507,7 @@ class DeLawSettingsTab extends PluginSettingTab {
       {
         name: ui.supportedLaws,
         render: (setting) => {
+          setting.settingEl.addClass("de-law-settings-supported-setting");
           this.renderSupportedLawsPresentation(setting.settingEl);
         },
       },
