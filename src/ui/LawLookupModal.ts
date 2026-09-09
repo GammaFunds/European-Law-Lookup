@@ -52,7 +52,7 @@ interface LawLookupModalSettingsStore {
 export type InputLayout = "single" | "split";
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" ? value : "EU";
 }
 
 export function normalizeInputLayout(value: unknown): InputLayout {
@@ -69,8 +69,13 @@ export function decomposeOneLineLookupInput(
 ): { law: string; reference: string } | null {
   const value = input.trim();
   if (!value) return { law: "", reference: "" };
-  const actFirst = value.match(/^(.+?)\s+((?:§|Art\.?)[ ]*\S.*)$/u);
+  const marker = jurisdiction === "ES" ? "(?:§|Art[.]?|Artículo)" : "(?:§|Art[.]?)";
+  const actFirst = value.match(new RegExp(`^(.+?)\\s+((?:${marker})[ ]*\\S.*)$`, "iu"));
   if (actFirst) return { law: actFirst[1].trim(), reference: actFirst[2].trim() };
+  if (jurisdiction === "ES") {
+    const referenceFirst = value.match(/^(?:(?:Art[.]?|Artículo)\s*\S.*?)\s+(BOE-A-\d{4}-\d{1,5})$/iu);
+    if (referenceFirst) return { law: referenceFirst[2].trim(), reference: referenceFirst[1].trim() };
+  }
   if (jurisdiction === "DE" || jurisdiction === "AT" || jurisdiction === "CH") {
     const referenceFirst = value.match(/^((?:§|Art\.?)[ ]*\S.*?)\s+([A-Z][A-Z0-9.-]*)$/u);
     if (referenceFirst) return { law: referenceFirst[2].trim(), reference: referenceFirst[1].trim() };
@@ -149,19 +154,21 @@ export class LawLookupModal extends Modal {
       text: this.ui.jurisdictionAustria,
     });
     jurisdictionSelect.createEl("option", { value: "CH", text: this.ui.jurisdictionSwitzerland });
+    jurisdictionSelect.createEl("option", { value: "ES", text: this.ui.jurisdictionSpain });
     jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
+      this.lookupSequence.next();
       this.selectedJurisdiction = jurisdictionSelect.value as LawJurisdiction;
       this.selectedLaw = null;
+      this.currentSection = null;
+      this.currentMarkdown = "";
       if (this.inputLayout === "split") {
         this.lawInputEl.value = "";
         this.referenceInputEl.value = "";
       }
       this.renderSelectedLawStatus();
+      this.renderResultMessage(this.ui.noLookupRunYet);
       this.renderActions();
-      if (this.inputEl?.value.trim()) {
-        void this.renderParsedReference();
-      }
       this.renderMetadataSuggestions();
     });
 
@@ -270,6 +277,7 @@ export class LawLookupModal extends Modal {
 
   private renderMetadataSuggestions(): void {
     this.suggestionsEl.empty();
+    if (this.selectedJurisdiction === "ES") return;
     const suggestions = searchLawMetadata({
       query: this.lawInputValue(),
       jurisdiction: this.selectedJurisdiction,
@@ -372,7 +380,7 @@ export class LawLookupModal extends Modal {
     this.selectedLawStatusEl.empty();
     if (!this.selectedLaw) return;
 
-    const reference = this.selectedJurisdiction === "EU" || this.selectedJurisdiction === "CH"
+    const reference = this.selectedJurisdiction === "EU" || this.selectedJurisdiction === "CH" || this.selectedJurisdiction === "ES"
       ? this.ui.articleReferences
       : `${this.ui.sectionReferences} / ${this.ui.articleReferences}`;
     const message = this.ui.selectedLawContinueWithReference
@@ -382,6 +390,8 @@ export class LawLookupModal extends Modal {
   }
 
   private *metadataSearchEntries(): Generator<LawMetadataSearchEntry> {
+    if (this.selectedJurisdiction === "ES") return;
+
     if (this.selectedJurisdiction === "DE") {
       for (const law of getSupportedGesetzeImInternetLaws()) {
         yield {

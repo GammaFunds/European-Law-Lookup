@@ -59,12 +59,16 @@ export interface UiStrings extends UiPresentationStrings {
   jurisdictionGermany: string;
   jurisdictionAustria: string;
   jurisdictionSwitzerland: string;
+  jurisdictionSpain: string;
   jurisdictionEuropeanUnion: string;
   euTextLanguage: string;
   defaultEuTextLanguage: string;
   defaultEuTextLanguageDescription: string;
   euLanguageExpressionUnavailable: string;
   acceptedInputFormats: string;
+  spainAcceptedInputFormats: string;
+  spainInputExamples: string;
+  spainScopeNote: string;
   directCelexCitation: string;
   structuredArticleFirst: string;
   structuredActFirst: string;

@@ -24,13 +24,14 @@ const REQUIRED_UI_STRING_KEYS = [
   "examples", "lookUpLawTitle", "lawReferencePlaceholder", "lookUpLawButton", "noLookupRunYet", "noRecognizedCitation",
   "lookingUpLaw", "noCitationFound", "useEnglishTranslationWhenAvailable", "englishTranslationUnavailableForCitation",
   "insertSourceAndCacheNote", "insertIntoCurrentNote", "noActiveMarkdownEditorFound", "jurisdictionLabel", "jurisdictionGermany",
-  "jurisdictionAustria", "jurisdictionSwitzerland", "jurisdictionEuropeanUnion", "euTextLanguage", "defaultEuTextLanguage",
+  "jurisdictionAustria", "jurisdictionSwitzerland", "jurisdictionSpain", "jurisdictionEuropeanUnion", "euTextLanguage", "defaultEuTextLanguage",
   "defaultEuTextLanguageDescription", "euLanguageExpressionUnavailable", "acceptedInputFormats", "directCelexCitation",
   "structuredArticleFirst", "structuredActFirst", "knownAlias", "exactOfficialTitle", "euDirectCelexExamples",
   "euStructuredCitationExample", "euActFirstExample", "euAliasExamples", "euExactTitleExample", "euScopeNote", "source",
   "retrievedOn", "cache", "live", "cached", "stale", "englishTextVariantNotice", "austrianConsolidatedNotice",
   "euOfficialLanguageNotice", "celex", "sourceMetadata", "cacheMetadata", "swissOfficialTextLanguage", "unexpectedLookupFailure",
   "refreshEuActIndex",
+  "spainAcceptedInputFormats", "spainInputExamples", "spainScopeNote",
 ] as const;
 
 // Every identical value is authorized by locale and exact key; no key has a global exemption.

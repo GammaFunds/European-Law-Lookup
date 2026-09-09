@@ -1,6 +1,6 @@
 export type LawReferenceType = "section" | "article";
 export type LawSourceVariant = "official-de" | "translation-en";
-export type LawJurisdiction = "DE" | "AT" | "CH" | "EU";
+export type LawJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
 export type EuDocumentType = "R" | "L" | "D";
 export type EuLawLanguage =
   | "bg" | "es" | "cs" | "da" | "de" | "et" | "el" | "en" | "fr" | "ga" | "hr" | "it"

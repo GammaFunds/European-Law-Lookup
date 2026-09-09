@@ -281,6 +281,29 @@ describe("lawSectionCacheKey", () => {
     );
   });
 
+  it("prefixes ES cache keys without changing legacy DE keys", () => {
+    assert.equal(
+      lawSectionCacheKey({ lawCode: "BOE-A-2015-10566", section: "1", jurisdiction: "ES" }),
+      "ES:BOE-A-2015-10566:1:official-de",
+    );
+    assert.equal(
+      lawSectionCacheKey({ lawCode: "BOE-A-2015-10566", section: "1" }),
+      "BOE-A-2015-10566:1:official-de",
+    );
+  });
+
+  it("does not cross-read ES and legacy DE cache entries", async () => {
+    const cache = new InMemoryLawSectionCache();
+    const de = { lawCode: "BOE-A-2015-10566", section: "1" };
+    const es = { ...de, jurisdiction: "ES" as const };
+
+    await cache.set(section({ ...de, text: "DE cache" }));
+    assert.equal((await cache.get(es))?.text, undefined);
+    await cache.set(section({ ...es, text: "ES cache" }));
+    assert.equal((await cache.get(de))?.text, "DE cache");
+    assert.equal((await cache.get(es))?.text, "ES cache");
+  });
+
   it("isolates CH cache keys by official language", () => {
     const base = { lawCode: "BV", section: "1", referenceType: "article" as const, jurisdiction: "CH" as const };
     const de = lawSectionCacheKey({ ...base, language: "de" });

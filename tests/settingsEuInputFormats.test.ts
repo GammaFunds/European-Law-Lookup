@@ -227,7 +227,7 @@ describe("EU Settings input-format presentation", () => {
       getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }>;
     };
     const definition = tab.getSettingDefinitions().find((candidate) => candidate.control?.key === "defaultJurisdiction");
-    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH"]);
+    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES"]);
   });
 
   it("uses persisted default jurisdiction through the production command without provider requests", async () => {
@@ -247,7 +247,7 @@ describe("EU Settings input-format presentation", () => {
   });
 
   it("round-trips supported jurisdiction values and fails malformed data back to EU", async () => {
-    for (const jurisdiction of ["EU", "DE", "AT", "CH"] as const) {
+    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES"] as const) {
       const { plugin } = loadPlugin("en", { defaultJurisdiction: jurisdiction });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
       assert.equal(
@@ -403,7 +403,7 @@ describe("EU Settings input-format presentation", () => {
 
     const tabs = container.children.find((child) => child.className === "de-law-settings-jurisdiction-tabs")!;
     assert.equal(tabs.attributes.get("role"), "tablist");
-    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab"]);
+    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab", "tab"]);
   });
 });
 

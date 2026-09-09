@@ -3,6 +3,36 @@ import { describe, it } from "node:test";
 import { parseLawReference, parseLawReferenceWithSelectedJurisdiction } from "../src/parser";
 
 describe("parseLawReference", () => {
+  it("parses Spain BOE article references in both orders and supported forms", () => {
+    for (const input of [
+      "BOE-A-2015-10566 Art. 1",
+      "Art. 1 BOE-A-2015-10566",
+      "BOE-A-2015-10566 Art 1",
+      "BOE-A-2015-10566 Artículo 1",
+      "Artículo 1 BOE-A-2015-10566",
+      "boe-a-2015-10566 artículo   1",
+    ]) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "ES"), {
+        lawCode: "BOE-A-2015-10566",
+        section: "1",
+        referenceType: "article",
+        jurisdiction: "ES",
+      }, input);
+    }
+  });
+
+  it("parses supported Spain article suffixes without broadening other jurisdictions", () => {
+    for (const suffix of ["bis", "ter", "quater", "quinquies", "sexies"]) {
+      assert.equal(
+        parseLawReferenceWithSelectedJurisdiction(`BOE-A-1889-4763 Art. 172 ${suffix}`, "ES")?.section,
+        `172 ${suffix}`,
+      );
+    }
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("BOE-A-2015-10566 Art. 1", "DE"), null);
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("BOE-A-2015-123456 Art. 1", "ES"), null);
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("BOE-A-2015-10566 ELI Art. 1", "ES"), null);
+  });
+
   it("parses GG article-first references", () => {
     assert.deepEqual(parseLawReference("Art. 1 GG"), {
       lawCode: "GG",

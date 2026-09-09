@@ -511,7 +511,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
 
   it("opens with the persisted jurisdiction and keeps the required option order without lookup", () => {
     const harness = buildAutocompleteModalHarness("CH", "single", "CH");
-    assert.deepEqual(harness.jurisdictionSelect.children.map((option) => option.value), ["EU", "DE", "AT", "CH"]);
+    assert.deepEqual(harness.jurisdictionSelect.children.map((option) => option.value), ["EU", "DE", "AT", "CH", "ES"]);
     assert.equal(harness.jurisdictionSelect.value, "CH");
     assert.equal(harness.requests.length, 0);
   });

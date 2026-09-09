@@ -1,4 +1,5 @@
 import type { LawProvider } from "./LawProvider";
+import { providersForReference } from "./providerComposition";
 import {
   CachedLawProvider,
   type LawSectionCache,
@@ -35,8 +36,8 @@ export function buildCachedLawProviders(
 
 export function allowedCachedProviderIds(enableMockLawProvider: boolean): string[] {
   return enableMockLawProvider
-    ? ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "mock"]
-    : ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris"];
+    ? ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "mock"]
+    : ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe"];
 }
 
 function createProviderChain(providers: LawProvider[]): LawProvider {
@@ -44,7 +45,7 @@ function createProviderChain(providers: LawProvider[]): LawProvider {
     id: "provider-chain",
     label: "Provider chain",
     async getSection(reference) {
-      for (const provider of providers) {
+      for (const provider of providersForReference(providers, reference)) {
         const section = await provider.getSection(reference);
         if (section) {
           return section;
