@@ -112,6 +112,28 @@ describe("BoeLawProvider", () => {
     assert.equal(calls.some((url) => url.includes("/texto/indice") || url.includes("/texto/bloque/")), false);
   });
 
+  it("extracts exactly one canonical Permalink ELI from a page with extraneous definition-list noise", async () => {
+    const noisyRecord = `<html><body>
+      <dl>
+        <dt>Permalink ELI:</dt>
+        <dd><a href="${ELI_WORK}/con">${ELI_WORK}/con</a></dd>
+        <dt>Otra definición:</dt>
+        <dd><a href="https://www.boe.es/otro/enlace">enlace</a></dd>
+        <dt>Fecha:</dt>
+        <dd>2024-08-02</dd>
+      </dl>
+    </body></html>`;
+    const { provider } = providerWith({
+      [RECORD_URL]: response(noisyRecord),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(block("a1", version("2024-08-02", "noisy record text")), 200, true),
+    });
+    const section = await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.match(section?.text ?? "", /noisy record text/);
+  });
+
   it("rejects missing, duplicate, conflicting, and malformed official-page permalinks", async () => {
     for (const page of [
       "<html><body>Permalink ELI:</body></html>",

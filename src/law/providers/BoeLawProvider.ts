@@ -115,8 +115,14 @@ export class BoeLawProvider implements LawProvider {
   }
 
   private parseOfficialPageWork(html: string): string {
-    const matches = [...html.matchAll(/<dt\b[^>]*>\s*Permalink ELI:\s*<\/dt>\s*<dd\b[^>]*>\s*<a\b[^>]*\bhref\s*=\s*(["'])([^"']+)\1[^>]*>/gi)]
-      .map((match) => match[2]);
+    const pattern = /<dt\b[^>]*>\s*Permalink ELI:\s*<\/dt>\s*<dd\b[^>]*>\s*<a\b[^>]*\bhref\s*=\s*(["'])([^"']+)\1[^>]*>/gi;
+    const matches: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(html)) !== null) {
+      if (match[2] !== undefined) {
+        matches.push(match[2]);
+      }
+    }
     if (matches.length !== 1 || !isCanonicalConsolidatedEliUrl(matches[0])) {
       throw new Error("BOE official record contains an ambiguous or malformed ELI permalink");
     }
