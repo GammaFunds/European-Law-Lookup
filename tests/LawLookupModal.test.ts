@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { App } from "obsidian";
 import type { EuActIndex, EuActIndexEntry } from "../src/law/euActIndex";
 import type { ProviderRegistry } from "../src/law/ProviderRegistry";
-import type { EuLawLanguage, LawReference } from "../src/law/types";
+import type { EuLawLanguage, LawReference, LawSection } from "../src/law/types";
 import type { LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
 import type { UiStrings } from "../src/ui/i18n";
 
@@ -14,17 +14,20 @@ class FakeElement {
   listeners: Record<string, Listener[]> = {};
   text = "";
   value = "";
+  tag = "";
 
   createEl(tag: string, options?: { text?: string; value?: string }): FakeElement {
     const child = new FakeElement();
+    child.tag = tag;
     child.text = options?.text ?? "";
     child.value = options?.value ?? "";
     this.children.push(child);
     return child;
   }
 
-  createDiv(): FakeElement {
+  createDiv(options?: { text?: string }): FakeElement {
     const child = new FakeElement();
+    child.text = options?.text ?? "";
     this.children.push(child);
     return child;
   }
@@ -33,6 +36,12 @@ class FakeElement {
 
   empty(): void {
     this.children = [];
+  }
+
+  remove(): void {}
+
+  insertBefore(child: FakeElement, _reference: FakeElement): void {
+    this.children.unshift(child);
   }
 
   addEventListener(type: string, listener: Listener): void {
@@ -192,6 +201,7 @@ function loadWithObsidianStub<T>(load: () => T): T {
 
 interface LawLookupModalLike {
   onOpen(): void;
+  setInputLayout(layout: "single" | "split"): boolean;
 }
 
 type LawLookupModalConstructor = new (
@@ -248,6 +258,7 @@ interface ModalHarness {
   requests: CapturedRequest[];
   inputEl: FakeElement;
   jurisdictionSelect: FakeElement;
+  modal: LawLookupModalLike;
   lastRequest(): CapturedRequest;
 }
 
@@ -255,13 +266,36 @@ function settle(): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(() => resolve()));
 }
 
-function buildModalHarness(index: EuActIndex | null): ModalHarness {
+const successfulSection: LawSection = {
+  providerId: "eu-test",
+  providerLabel: "EU test provider",
+  sourceUrl: "https://example.test/law",
+  lawCode: "32016R0679",
+  lawTitle: "Test law",
+  section: "1",
+  referenceType: "article",
+  jurisdiction: "EU",
+  language: "deu",
+  heading: "Article 1",
+  text: "retrieved legal text",
+  retrievedAt: "2026-09-08T00:00:00.000Z",
+  cacheStatus: "live",
+  isOfficialSource: true,
+  isAuthoritativeText: false,
+};
+
+function buildModalHarness(
+  index: EuActIndex | null,
+  getSection: (reference: LawReference) => Promise<LawSection | null> = async () => {
+    throw new Error("probe-provider-unavailable");
+  },
+): ModalHarness {
   FakeSetting.instances = [];
   const requests: CapturedRequest[] = [];
   const providerRegistry = {
-    getSection: async (reference: LawReference): Promise<never> => {
+    getSection: async (reference: LawReference): Promise<LawSection | null> => {
       requests.push({ language: reference.language, euCelex: reference.euCelex });
-      throw new Error("probe-provider-unavailable");
+      return getSection(reference);
     },
   };
   const settingsStore = {
@@ -286,7 +320,7 @@ function buildModalHarness(index: EuActIndex | null): ModalHarness {
   const jurisdictionSelect = formEl.children[1];
   jurisdictionSelect.value = "EU";
   jurisdictionSelect.fire("change");
-  return { requests, inputEl, jurisdictionSelect, lastRequest: () => requests[requests.length - 1] };
+  return { requests, inputEl, jurisdictionSelect, modal, lastRequest: () => requests[requests.length - 1] };
 }
 
 async function runLookup(harness: ModalHarness, input: string): Promise<void> {
@@ -304,6 +338,34 @@ function languageDropdown(): FakeDropdown {
 }
 
 describe("LawLookupModal EU requested language preservation", () => {
+  it("does not look up when switching to Spain with a valid BOE citation", async () => {
+    const harness = buildModalHarness(null);
+    harness.inputEl.value = "BOE-A-2015-10566 Art. 1";
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    await settle();
+    assert.equal(harness.requests.length, 0);
+
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 1);
+  });
+
+  it("does not look up when switching between existing jurisdictions with a valid citation", async () => {
+    const harness = buildModalHarness(null);
+    harness.jurisdictionSelect.value = "CH";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "Art. 1 GG";
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    await settle();
+    assert.equal(harness.requests.length, 0);
+
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 1);
+  });
+
   it("C1: stale advisory index must not rewrite the requested language", async () => {
     const harness = buildModalHarness(makeEuActIndex([
       { celex: GDPR_CELEX, availableLanguages: ["deu"] },
@@ -371,6 +433,107 @@ describe("LawLookupModal EU requested language preservation", () => {
     assert.equal(harness.requests.length, 2);
     assert.equal(harness.lastRequest().language, "deu");
     assert.equal(harness.lastRequest().euCelex, GDPR_CELEX);
+  });
+
+  it("clears a successful result and insertion action on a jurisdiction switch without requesting", async () => {
+    const harness = buildModalHarness(null, async () => successfulSection);
+    await runLookup(harness, GDPR_INPUT);
+    const state = harness.modal as unknown as {
+      currentSection: LawSection | null;
+      currentMarkdown: string;
+      resultEl: FakeElement;
+      actionsEl: FakeElement;
+    };
+    assert.equal(state.currentSection?.text, "retrieved legal text");
+    assert.match(state.currentMarkdown, /retrieved legal text/);
+    assert.ok(state.actionsEl.children.some((child) => child.tag === "button"));
+    const requestCount = harness.requests.length;
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+
+    assert.equal(harness.requests.length, requestCount);
+    assert.equal(state.currentSection, null);
+    assert.equal(state.currentMarkdown, "");
+    assert.equal(state.resultEl.children.length, 1);
+    assert.equal(state.actionsEl.children.some((child) => child.tag === "button"), false);
+  });
+
+  it("does not publish a pending result after switching jurisdiction", async () => {
+    let resolvePending!: (section: LawSection) => void;
+    const pending = new Promise<LawSection>((resolve) => { resolvePending = resolve; });
+    const harness = buildModalHarness(null, async () => pending);
+    harness.inputEl.value = GDPR_INPUT;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 1);
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    resolvePending(successfulSection);
+    await settle();
+
+    const state = harness.modal as unknown as {
+      currentSection: LawSection | null;
+      currentMarkdown: string;
+      resultEl: FakeElement;
+      actionsEl: FakeElement;
+    };
+    assert.equal(state.currentSection, null);
+    assert.equal(state.currentMarkdown, "");
+    assert.equal(state.resultEl.children.length, 1);
+    assert.equal(state.actionsEl.children.some((child) => child.tag === "button"), false);
+    assert.equal(harness.requests.length, 1);
+  });
+
+  it("clears Spain results when switching to an existing jurisdiction", async () => {
+    const harness = buildModalHarness(null, async () => ({ ...successfulSection, jurisdiction: "ES", language: "es" }));
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    await runLookup(harness, "BOE-A-2015-10566 Art. 1");
+    const state = harness.modal as unknown as { currentSection: LawSection | null };
+    assert.equal(state.currentSection?.jurisdiction, "ES");
+
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(state.currentSection, null);
+    assert.equal(harness.requests.length, 1);
+  });
+
+  it("clears an existing-jurisdiction result when switching to Spain and allows a fresh lookup", async () => {
+    const harness = buildModalHarness(null, async () => successfulSection);
+    await runLookup(harness, GDPR_INPUT);
+    const state = harness.modal as unknown as { currentSection: LawSection | null };
+    assert.equal(state.currentSection?.jurisdiction, "EU");
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(state.currentSection, null);
+    assert.equal(harness.requests.length, 1);
+
+    await runLookup(harness, "BOE-A-2015-10566 Art. 1");
+    assert.equal(harness.requests.length, 2);
+    const sectionAfterLookup = (harness.modal as unknown as { currentSection: LawSection | null }).currentSection;
+    assert.ok(sectionAfterLookup);
+    assert.equal(sectionAfterLookup.jurisdiction, "EU");
+  });
+
+  it("invalidates results on jurisdiction switch in split input layout", async () => {
+    const harness = buildModalHarness(null, async () => successfulSection);
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    const split = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement; currentSection: LawSection | null };
+    split.lawInputEl.value = "BOE-A-2015-10566";
+    split.referenceInputEl.value = "Art. 1";
+    split.referenceInputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(split.currentSection?.text, "retrieved legal text");
+
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(split.currentSection, null);
+    assert.equal(harness.requests.length, 1);
   });
 });
 

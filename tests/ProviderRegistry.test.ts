@@ -36,20 +36,20 @@ describe("ProviderRegistry", () => {
     const calls: string[] = [];
     const resolved = section("second", "Second Provider");
     const registry = new ProviderRegistry([
-      provider("first", null, calls),
-      provider("second", resolved, calls),
-      provider("third", section("third", "Third Provider"), calls),
+      provider("neuris", null, calls),
+      provider("gesetze-im-internet", resolved, calls),
+      provider("ris", section("third", "Third Provider"), calls),
     ]);
 
     const result = await registry.getSection({ lawCode: "BGB", section: "823" });
 
-    assert.deepEqual(calls, ["first", "second"]);
+    assert.deepEqual(calls, ["neuris", "gesetze-im-internet"]);
     assert.equal(result.providerId, "second");
     assert.equal(result.providerLabel, "Second Provider");
   });
 
   it("throws a typed error when no provider resolves the reference", async () => {
-    const registry = new ProviderRegistry([provider("first", null, [])]);
+    const registry = new ProviderRegistry([provider("neuris", null, [])]);
 
     await assert.rejects(
       registry.getSection({ lawCode: "BGB", section: "999" }),
@@ -60,22 +60,22 @@ describe("ProviderRegistry", () => {
   it("does not continue to later providers after a provider failure", async () => {
     const calls: string[] = [];
     const failingProvider: LawProvider = {
-      id: "official",
+      id: "neuris",
       label: "Official Provider",
       async getSection(_reference: LawReference) {
-        calls.push("official");
-        throw new LawProviderUnavailableError("official", "official lookup failed");
+        calls.push("neuris");
+        throw new LawProviderUnavailableError("neuris", "official lookup failed");
       },
     };
     const registry = new ProviderRegistry([
       failingProvider,
-      provider("mock", section("mock", "Mock Provider"), calls),
+      provider("gesetze-im-internet", section("mock", "Mock Provider"), calls),
     ]);
 
     await assert.rejects(
       registry.getSection({ lawCode: "BGB", section: "823" }),
       LawProviderUnavailableError,
     );
-    assert.deepEqual(calls, ["official"]);
+    assert.deepEqual(calls, ["neuris"]);
   });
 });

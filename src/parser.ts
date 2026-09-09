@@ -12,6 +12,7 @@ export type ParsedLawReference = LawReference;
 
 const lawCodePattern = String.raw`[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9-]*`;
 const sectionPattern = String.raw`\d+[A-Za-z]?`;
+const spanishSectionPattern = String.raw`\d+(?:[A-Za-z]|\s+(?:bis|ter|quater|quinquies|sexies))?`;
 const articleMarkerPattern = String.raw`(?:Art\.?|Artikel)`;
 const explicitSlashLawCodes = [
   "FreizügG/EU",
@@ -95,6 +96,17 @@ const articleFirstPattern = new RegExp(
 
 const lawFirstArticlePattern = new RegExp(
   String.raw`^(${lawCodePattern})\s+${articleMarkerPattern}\s*(${sectionPattern})$`,
+  "iu",
+);
+
+const spanishBoeIdentifierPattern = String.raw`(BOE-A-\d{4}-\d{1,5})`;
+const spanishArticleMarkerPattern = String.raw`(?:Art\.?|Artículo)`;
+const spanishArticleFirstPattern = new RegExp(
+  String.raw`^${spanishArticleMarkerPattern}\s*(${spanishSectionPattern})\s+${spanishBoeIdentifierPattern}$`,
+  "iu",
+);
+const spanishLawFirstPattern = new RegExp(
+  String.raw`^${spanishBoeIdentifierPattern}\s+${spanishArticleMarkerPattern}\s*(${spanishSectionPattern})$`,
   "iu",
 );
 
@@ -207,6 +219,10 @@ export function parseLawReferenceWithSelectedJurisdiction(
     const humanCitation = resolveEuHumanCitation(normalized, index ?? null);
     if (humanCitation) return humanCitation;
   }
+
+  if (selectedJurisdiction === "ES") {
+    return parseSpanishLawReference(input);
+  }
   const parsedReference = parseLawReference(input);
   if (parsedReference) {
     if (
@@ -273,6 +289,35 @@ export function parseLawReferenceWithSelectedJurisdiction(
   }
 
   return null;
+}
+
+function parseSpanishLawReference(input: string): ParsedLawReference | null {
+  const normalized = input.trim().replace(/\s+/g, " ");
+  const articleFirst = normalized.match(spanishArticleFirstPattern);
+  if (articleFirst) {
+    return {
+      lawCode: articleFirst[2].toUpperCase(),
+      section: normalizeSpanishSection(articleFirst[1]),
+      referenceType: "article",
+      jurisdiction: "ES",
+    };
+  }
+
+  const lawFirst = normalized.match(spanishLawFirstPattern);
+  if (lawFirst) {
+    return {
+      lawCode: lawFirst[1].toUpperCase(),
+      section: normalizeSpanishSection(lawFirst[2]),
+      referenceType: "article",
+      jurisdiction: "ES",
+    };
+  }
+
+  return null;
+}
+
+function normalizeSpanishSection(section: string): string {
+  return section.trim().replace(/\s+/g, " ").replace(/\s+(bis|ter|quater|quinquies|sexies)$/iu, (_match, suffix: string) => ` ${suffix.toLowerCase()}`);
 }
 
 function parseEuCelexArticle(input: string): ParsedLawReference | null {

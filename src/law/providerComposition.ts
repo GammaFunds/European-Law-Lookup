@@ -10,7 +10,26 @@ import { MockLawProvider } from "./providers/MockLawProvider";
 import { NeurisLawProvider } from "./providers/NeurisLawProvider";
 import { RisLawProvider } from "./providers/RisLawProvider";
 import { EurLexLawProvider } from "./providers/EurLexLawProvider";
+import { BoeLawProvider } from "./providers/BoeLawProvider";
 import type { EuActLanguageAuthorizer } from "./providers/eurLexMapping";
+import type { LawReference } from "./types";
+
+const PROVIDER_IDS_BY_JURISDICTION = {
+  EU: ["eur-lex"],
+  DE: ["neuris", "gesetze-im-internet"],
+  AT: ["ris"],
+  CH: ["fedlex"],
+  ES: ["boe"],
+} as const;
+
+export function providersForReference(providers: readonly LawProvider[], reference: LawReference): LawProvider[] {
+  const cachedProvider = providers.find((provider) => provider.id === "cache");
+  if (cachedProvider) return [cachedProvider];
+  const providerIds = PROVIDER_IDS_BY_JURISDICTION[reference.jurisdiction ?? "DE"];
+  return providerIds
+    .map((providerId) => providers.find((provider) => provider.id === providerId))
+    .filter((provider): provider is LawProvider => provider !== undefined);
+}
 
 export interface ProviderCompositionOptions {
   enableMockLawProvider?: boolean;
@@ -31,6 +50,7 @@ export function buildLawProviders(options: ProviderCompositionOptions = {}): Law
     new NeurisLawProvider(undefined, httpTransport),
     new GesetzeImInternetProvider(undefined, httpTransport),
     new RisLawProvider(undefined, httpTransport),
+    new BoeLawProvider(undefined, httpTransport),
   ];
 
   if (options.enableMockLawProvider === true) {

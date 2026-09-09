@@ -27,6 +27,7 @@ import {
 import {
   getSupportedFedlexLaws,
 } from "./law/providers/fedlexMapping";
+import { getSupportedBoeLaws } from "./law/providers/boeMapping";
 import {
   normalizeFedlexLanguage,
   type OfficialTitlesByLanguage,
@@ -471,6 +472,7 @@ class DeLawSettingsTab extends PluginSettingTab {
             DE: ui.jurisdictionGermany,
             AT: ui.jurisdictionAustria,
             CH: ui.jurisdictionSwitzerland,
+            ES: ui.jurisdictionSpain,
           },
         },
       },
@@ -571,6 +573,7 @@ class DeLawSettingsTab extends PluginSettingTab {
       { label: ui.jurisdictionGermany, tabId: "de-law-jurisdiction-tab-germany", panelId: "de-law-jurisdiction-panel-germany" },
       { label: ui.jurisdictionAustria, tabId: "de-law-jurisdiction-tab-austria", panelId: "de-law-jurisdiction-panel-austria" },
       { label: ui.jurisdictionSwitzerland, tabId: "de-law-jurisdiction-tab-switzerland", panelId: "de-law-jurisdiction-panel-switzerland" },
+      { label: ui.jurisdictionSpain, tabId: "de-law-jurisdiction-tab-spain", panelId: "de-law-jurisdiction-panel-spain" },
     ];
 
     const tabs: HTMLButtonElement[] = [];
@@ -621,6 +624,10 @@ class DeLawSettingsTab extends PluginSettingTab {
       ui,
       selectSwissSettingsTitleLanguage(safeGetObsidianLanguage()),
     );
+
+    this.renderSupportedLawsGroup(panels[4], ui.articleReferences, getSupportedBoeLaws(), ui);
+    panels[4].createEl("p", { cls: "de-law-settings-supported-description", text: ui.spainScopeNote });
+    this.renderSpainInputFormats(panels[4], ui);
 
     const allTabs = tabs;
     const allPanels = panels;
@@ -685,6 +692,14 @@ class DeLawSettingsTab extends PluginSettingTab {
       }
     }
     containerEl.createEl("p", { cls: "de-law-settings-supported-description", text: ui.euScopeNote });
+  }
+
+  private renderSpainInputFormats(containerEl: HTMLElement, ui: UiStrings): void {
+    new Setting(containerEl).setName(ui.spainAcceptedInputFormats).setHeading();
+    const examples = containerEl.createDiv({ cls: "de-law-settings-supported-example-list" });
+    for (const example of ui.spainInputExamples.split(";").map((value) => value.trim()).filter(Boolean)) {
+      examples.createEl("code", { cls: "de-law-settings-supported-example", text: example });
+    }
   }
 
   private renderSupportedLawsGroup(
@@ -754,5 +769,5 @@ function normalizeTtlDays(value: unknown): number | null {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" ? value : "EU";
 }

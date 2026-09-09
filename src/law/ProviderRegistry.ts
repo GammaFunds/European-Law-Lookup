@@ -1,4 +1,5 @@
 import type { LawProvider } from "./LawProvider";
+import { providersForReference } from "./providerComposition";
 import type { LawReference, LawSection } from "./types";
 
 export class LawSectionNotFoundError extends Error {
@@ -12,7 +13,7 @@ export class ProviderRegistry {
   constructor(private readonly providers: LawProvider[]) {}
 
   async getSection(reference: LawReference): Promise<LawSection> {
-    for (const provider of this.providers) {
+    for (const provider of providersForReference(this.providers, reference)) {
       const section = await provider.getSection(reference);
       if (section) {
         return section;
@@ -22,4 +23,3 @@ export class ProviderRegistry {
     throw new LawSectionNotFoundError(reference);
   }
 }
-
