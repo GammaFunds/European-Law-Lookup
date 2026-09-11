@@ -2,7 +2,7 @@ import { parseEuCelex } from "./euActRegistry";
 import { euDocumentTypeForHumanCitationActLabel } from "./euHumanCitation";
 import type { EuDocumentType } from "./types";
 
-export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU";
+export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
 
 export type LawMetadataMatchKind =
   | "exact-alias"
@@ -14,6 +14,7 @@ export interface LawMetadataSearchEntry {
   jurisdiction: LawMetadataJurisdiction;
   canonicalInput: string;
   title: string;
+  sourceUrl?: string;
   aliases?: readonly string[];
   alternateTitles?: readonly string[];
   celex?: string;

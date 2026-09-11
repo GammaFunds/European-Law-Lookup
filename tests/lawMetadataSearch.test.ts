@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import { BoeLawDiscoveryMalformedResponseError } from "../src/law/providers/BoeLawDiscovery";
 
-type Jurisdiction = "DE" | "AT" | "CH" | "EU";
+type Jurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
 type EuDocumentType = "R" | "L" | "D";
 type MatchKind = "exact-alias" | "title-prefix" | "title-contains" | "eu-technical";
 
@@ -427,6 +428,8 @@ function buildAutocompleteModalHarness(
   jurisdiction: Jurisdiction,
   inputLayout = "single",
   defaultJurisdiction: Jurisdiction = "EU",
+  discoveryProvider?: unknown,
+  getSection?: (reference: unknown) => Promise<unknown>,
 ) {
   FakeSetting.instances = [];
   const requests: unknown[] = [];
@@ -436,6 +439,7 @@ function buildAutocompleteModalHarness(
   const providerRegistry = {
     getSection: async (reference: unknown) => {
       requests.push(reference);
+      if (getSection) return getSection(reference);
       throw new Error("probe-provider-unavailable");
     },
   };
@@ -452,7 +456,7 @@ function buildAutocompleteModalHarness(
     getInputLayout: () => inputLayout,
   };
   const indexProvider = { getEuActIndex: () => makeAutocompleteEuIndex() };
-  const modal = new LawLookupModal({}, providerRegistry, settingsStore, ui, indexProvider);
+  const modal = new LawLookupModal({}, providerRegistry, settingsStore, ui, indexProvider, discoveryProvider);
   modal.onOpen();
   const formEl = modal.contentEl.children[1];
   const inputEl = formEl.children.find((child) => child.tagName === "INPUT" && child.cls === "")!;
@@ -474,6 +478,24 @@ function selectedLawStatusFor(formEl: FakeElement): FakeElement {
   const status = formEl.children.find((child) => child.cls === "de-law-selected-law-status");
   assert.ok(status, "expected selected-law status container");
   return status;
+}
+
+function loadingIndicatorFor(formEl: FakeElement): FakeElement | undefined {
+  return suggestionsFor(formEl).children.find((child) => child.cls === "de-law-lookup-loading");
+}
+
+function waitForBoeDiscovery(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 300));
+}
+
+function boeEntry(title: string, canonicalInput = "BOE-A-2015-10566") {
+  return {
+    jurisdiction: "ES" as const,
+    canonicalInput,
+    title,
+    aliases: [canonicalInput],
+    sourceUrl: `https://www.boe.es/buscar/act.php?id=${canonicalInput}`,
+  };
 }
 
 describe("LawLookupModal metadata autocomplete integration", () => {
@@ -553,6 +575,432 @@ describe("LawLookupModal metadata autocomplete integration", () => {
     assert.equal(suggestions.children.length, 1);
     assert.match(suggestions.children[0].text, /Artificial Intelligence Act/i);
     assert.match(suggestions.children[0].text, /32024R1689/);
+  });
+
+  it("renders an authoritative BOE suggestion for a meaningful ES query", async () => {
+    const discoveryProvider = {
+      search: async () => ({
+        kind: "results",
+        entries: [{
+          jurisdiction: "ES",
+          canonicalInput: "BOE-A-2015-10566",
+          title: "Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.",
+          aliases: ["BOE-A-2015-10566"],
+          sourceUrl: "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10566",
+        }],
+      }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+
+    const suggestions = suggestionsFor(harness.formEl);
+    assert.equal(suggestions.children.length, 1);
+    assert.match(suggestions.children[0].text, /Ley 40\/2015/u);
+    assert.match(suggestions.children[0].text, /BOE-A-2015-10566/u);
+  });
+
+  it("shows a loading indicator only after the debounced BOE request begins", async () => {
+    let resolvePending!: (result: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((resolve) => { resolvePending = resolve; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    await waitForBoeDiscovery();
+
+    const loading = loadingIndicatorFor(harness.formEl);
+    assert.ok(loading);
+    assert.equal(loading.attributes.role, "status");
+    assert.equal(loading.attributes["aria-label"], "Loading law suggestions");
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "true");
+
+    resolvePending({ kind: "results", entries: [] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+
+  it("removes the loading indicator after BOE discovery completes with results", async () => {
+    let resolvePending!: (result: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((resolve) => { resolvePending = resolve; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    resolvePending({ kind: "results", entries: [boeEntry("Found law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+  });
+
+  it("removes the loading indicator after BOE discovery returns no results", async () => {
+    let resolvePending!: (result: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((resolve) => { resolvePending = resolve; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    resolvePending({ kind: "no-results" });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+    assert.equal(suggestionsFor(harness.formEl).children[0].attributes["data-discovery-status"], "no-results");
+  });
+
+  it("removes the loading indicator after BOE discovery errors", async () => {
+    let rejectPending!: (error: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((_resolve, reject) => { rejectPending = reject; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    rejectPending(new Error("source unavailable"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+    assert.equal(suggestionsFor(harness.formEl).children[0].attributes["data-discovery-status"], "unavailable");
+  });
+
+  it("removes the loading indicator after BOE discovery returns malformed data", async () => {
+    let rejectPending!: (error: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((_resolve, reject) => { rejectPending = reject; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    rejectPending(new BoeLawDiscoveryMalformedResponseError("malformed response"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+    assert.equal(suggestionsFor(harness.formEl).children[0].attributes["data-discovery-status"], "malformed");
+  });
+
+  it("does not let an older slow BOE response overwrite newer results", async () => {
+    const pending: Array<{
+      query: string;
+      resolve: (result: unknown) => void;
+    }> = [];
+    const discoveryProvider = {
+      search: (query: string) => new Promise((resolve) => pending.push({ query, resolve })),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+
+    harness.inputEl.value = "first";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    harness.inputEl.value = "second";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    assert.deepEqual(pending.map((entry) => entry.query), ["first", "second"]);
+
+    pending[1].resolve({ kind: "results", entries: [boeEntry("Second law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    pending[0].resolve({ kind: "results", entries: [boeEntry("First law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const suggestions = suggestionsFor(harness.formEl);
+    assert.equal(suggestions.children.length, 1);
+    assert.match(suggestions.children[0].text, /Second law/u);
+    assert.doesNotMatch(suggestions.children[0].text, /First law/u);
+  });
+
+  it("does not let an older BOE response clear the newer request loading indicator", async () => {
+    const pending: Array<{ query: string; resolve: (result: unknown) => void }> = [];
+    const discoveryProvider = {
+      search: (query: string) => new Promise((resolve) => pending.push({ query, resolve })),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+
+    harness.inputEl.value = "first";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    harness.inputEl.value = "second";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+
+    pending[0].resolve({ kind: "results", entries: [boeEntry("First law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.ok(loadingIndicatorFor(harness.formEl));
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "true");
+
+    pending[1].resolve({ kind: "results", entries: [boeEntry("Second law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+  });
+
+  it("invalidates pending ES discovery results when jurisdiction changes", async () => {
+    let resolvePending!: (result: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((resolve) => { resolvePending = resolve; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "law";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    resolvePending({ kind: "results", entries: [boeEntry("Stale law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(suggestionsFor(harness.formEl).children.length, 0);
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+  });
+
+  it("clears pending BOE discovery state when the query is invalidated", async () => {
+    let resolvePending!: (result: unknown) => void;
+    const discoveryProvider = {
+      search: () => new Promise((resolve) => { resolvePending = resolve; }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "first";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+
+    harness.inputEl.value = "x";
+    harness.inputEl.fire("input");
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).attributes["aria-busy"], "false");
+
+    resolvePending({ kind: "results", entries: [boeEntry("Stale law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(loadingIndicatorFor(harness.formEl), undefined);
+    assert.equal(suggestionsFor(harness.formEl).children.length, 0);
+  });
+
+  it("invalidates the selected Spanish law when its query changes", async () => {
+    const discoveryProvider = {
+      search: async () => ({ kind: "results", entries: [boeEntry("Selected law")] }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "law";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    suggestionsFor(harness.formEl).children[0].fire("click");
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Selected law/u);
+
+    harness.inputEl.value = "different law";
+    harness.inputEl.fire("input");
+
+    assert.equal(selectedLawStatusFor(harness.formEl).text, "");
+  });
+
+  it("does not resurrect previous results after a newer BOE request fails", async () => {
+    const pending: Array<{ reject: (error: unknown) => void; resolve: (result: unknown) => void }> = [];
+    const discoveryProvider = {
+      search: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+
+    harness.inputEl.value = "first";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    pending[0].resolve({ kind: "results", entries: [boeEntry("First law")] });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.match(suggestionsFor(harness.formEl).children[0].text, /First law/u);
+
+    harness.inputEl.value = "second";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    pending[1].reject(new Error("source unavailable"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const suggestions = suggestionsFor(harness.formEl);
+    assert.equal(suggestions.children.length, 1);
+    assert.equal(suggestions.children[0].attributes["data-discovery-status"], "unavailable");
+    assert.doesNotMatch(suggestions.children[0].text, /First law/u);
+  });
+
+  it("explicitly selects a canonical BOE law and looks up only after button activation", async () => {
+    const discoveryProvider = {
+      search: async () => ({ kind: "results", entries: [boeEntry("Selected law")] }),
+    };
+    const harness = buildAutocompleteModalHarness(
+      "ES",
+      "single",
+      "EU",
+      discoveryProvider,
+      async () => null,
+    );
+    harness.inputEl.value = "law";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    suggestionsFor(harness.formEl).children[0].fire("click");
+
+    const selectedLaw = harness.modal as unknown as {
+      selectedLaw: { canonicalInput: string; sourceUrl?: string } | null;
+    };
+    assert.equal(harness.inputEl.value, "BOE-A-2015-10566 ");
+    assert.equal(selectedLaw.selectedLaw?.canonicalInput, "BOE-A-2015-10566");
+    assert.equal(selectedLaw.selectedLaw?.sourceUrl, "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10566");
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Selected law/u);
+    assert.equal(harness.requests.length, 0);
+
+    harness.inputEl.value = "BOE-A-2015-10566 Art. 1";
+    harness.inputEl.fire("input");
+    assert.match(selectedLawStatusFor(harness.formEl).text, /Selected law/u);
+    const lookupButton = harness.formEl.children.find((child) => child.text === "lookUpLawButton");
+    assert.ok(lookupButton);
+    lookupButton.fire("click");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(harness.requests.length, 1);
+    const reference = harness.requests[0] as { lawCode: string; section: string; jurisdiction?: string; referenceType?: string };
+    assert.equal(reference.lawCode, "BOE-A-2015-10566");
+    assert.equal(reference.section, "1");
+    assert.equal(reference.jurisdiction, "ES");
+    assert.equal(reference.referenceType, "article");
+  });
+
+  it("accepts a complete direct BOE identifier without starting discovery", async () => {
+    let discoveryCalls = 0;
+    const discoveryProvider = {
+      search: async () => {
+        discoveryCalls += 1;
+        return { kind: "no-results" as const };
+      },
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+
+    harness.inputEl.value = "BOE-A-2015-10566";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+
+    assert.equal(discoveryCalls, 0);
+    assert.equal(harness.inputEl.value, "BOE-A-2015-10566");
+    assert.equal(suggestionsFor(harness.formEl).children.length, 0);
+  });
+
+  it("canonicalizes a direct BOE identifier and uses it for explicit split-reference lookup", async () => {
+    let discoveryCalls = 0;
+    const discoveryProvider = {
+      search: async () => {
+        discoveryCalls += 1;
+        return { kind: "no-results" as const };
+      },
+    };
+    const harness = buildAutocompleteModalHarness("ES", "split", "EU", discoveryProvider, async () => null);
+    const split = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+
+    split.lawInputEl.value = "boe-a-2015-10566";
+    split.lawInputEl.fire("input");
+    await waitForBoeDiscovery();
+    assert.equal(discoveryCalls, 0);
+    assert.equal(split.lawInputEl.value, "BOE-A-2015-10566");
+
+    split.referenceInputEl.value = "Art. 1";
+    const lookupButton = harness.formEl.children.find((child) => child.text === "lookUpLawButton");
+    assert.ok(lookupButton);
+    lookupButton.fire("click");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(harness.requests[0], {
+      lawCode: "BOE-A-2015-10566",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "ES",
+      sourceVariant: "official-de",
+    });
+  });
+
+  it("does not promote incomplete or overlong BOE identifiers to canonical input", async () => {
+    for (const value of ["BOE-A-2015-", "BOE-A-2015", "BOE-A-2015-123456"]) {
+      let discoveryCalls = 0;
+      const discoveryProvider = {
+        search: async () => {
+          discoveryCalls += 1;
+          return { kind: "no-results" as const };
+        },
+      };
+      const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+      harness.inputEl.value = value;
+      harness.inputEl.fire("input");
+      await waitForBoeDiscovery();
+
+      assert.equal(discoveryCalls, 1, value);
+      assert.equal(harness.inputEl.value, value);
+    }
+  });
+
+  it("invalidates the direct canonical BOE identity when the law input changes", async () => {
+    let discoveryCalls = 0;
+    const discoveryProvider = {
+      search: async () => {
+        discoveryCalls += 1;
+        return { kind: "no-results" as const };
+      },
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+
+    harness.inputEl.value = "BOE-A-2015-10566";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    assert.equal(discoveryCalls, 0);
+
+    harness.inputEl.value = "BOE-A-2015";
+    harness.inputEl.fire("input");
+    await waitForBoeDiscovery();
+
+    assert.equal(discoveryCalls, 1);
+    assert.equal(harness.inputEl.value, "BOE-A-2015");
+  });
+
+  it("converges direct BOE-ID entry with autocomplete on the same lookup identity", async () => {
+    const discoveryProvider = {
+      search: async () => ({ kind: "results", entries: [boeEntry("Selected law")] }),
+    };
+    const autocomplete = buildAutocompleteModalHarness(
+      "ES",
+      "single",
+      "EU",
+      discoveryProvider,
+      async () => null,
+    );
+    autocomplete.inputEl.value = "law";
+    autocomplete.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    suggestionsFor(autocomplete.formEl).children[0].fire("click");
+    autocomplete.inputEl.value = "BOE-A-2015-10566 Art. 1";
+    const autocompleteButton = autocomplete.formEl.children.find((child) => child.text === "lookUpLawButton");
+    assert.ok(autocompleteButton);
+    autocompleteButton.fire("click");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    let directDiscoveryCalls = 0;
+    const direct = buildAutocompleteModalHarness(
+      "ES",
+      "single",
+      "EU",
+      { search: async () => { directDiscoveryCalls += 1; return { kind: "no-results" as const }; } },
+      async () => null,
+    );
+    direct.inputEl.value = "BOE-A-2015-10566 Art. 1";
+    direct.inputEl.fire("input");
+    await waitForBoeDiscovery();
+    assert.equal(directDiscoveryCalls, 0);
+    const directButton = direct.formEl.children.find((child) => child.text === "lookUpLawButton");
+    assert.ok(directButton);
+    directButton.fire("click");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(autocomplete.requests[0], direct.requests[0]);
   });
 
   it("selects a suggestion by canonicalizing the input without triggering lookup", () => {

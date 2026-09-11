@@ -34,6 +34,11 @@ import {
   type LawMetadataSearchEntry,
   type LawMetadataSuggestion,
 } from "../law/lawMetadataSearch";
+import {
+  BoeLawDiscoveryMalformedResponseError,
+  BoeLawDiscoveryUnavailableError,
+  type BoeLawDiscoveryResult,
+} from "../law/providers/BoeLawDiscovery";
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
@@ -87,7 +92,12 @@ export interface LawLookupModalIndexProvider {
   getEuActIndex(): EuActIndex | null;
 }
 
+export interface LawLookupModalDiscoveryProvider {
+  search(query: string): Promise<BoeLawDiscoveryResult>;
+}
+
 const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
+const COMPLETE_SPANISH_BOE_IDENTIFIER = /^BOE-A-\d{4}-\d{1,5}$/iu;
 let nextInputId = 0;
 
 export class LawLookupModal extends Modal {
@@ -113,6 +123,13 @@ export class LawLookupModal extends Modal {
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
   private inputLayout: InputLayout = "single";
+  private boeDiscoveryTimer: ReturnType<typeof setTimeout> | number | null = null;
+  private boeDiscoveryRevision = 0;
+  private boeDiscoveryPending: { query: string; revision: number } | null = null;
+  private boeDiscoveryLoadingEl: HTMLElement | null = null;
+  private explicitLookupPendingId: number | null = null;
+  private explicitLookupLoadingEl: HTMLElement | null = null;
+  private modalContainerEl: HTMLElement | null = null;
 
   constructor(
     app: App,
@@ -120,12 +137,16 @@ export class LawLookupModal extends Modal {
     private readonly settingsStore: LawLookupModalSettingsStore,
     private readonly ui: UiStrings,
     private readonly indexProvider: LawLookupModalIndexProvider = { getEuActIndex: () => null },
+    private readonly boeDiscovery: LawLookupModalDiscoveryProvider | null = null,
   ) {
     super(app);
   }
 
   onOpen() {
     const { contentEl } = this;
+    this.clearModalContainerClass();
+    this.modalContainerEl = this.modalEl?.parentElement ?? null;
+    this.modalContainerEl?.addClass("de-law-lookup-modal-container");
     contentEl.empty();
     contentEl.addClass("de-law-lookup-modal");
 
@@ -158,6 +179,8 @@ export class LawLookupModal extends Modal {
     jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
       this.lookupSequence.next();
+      this.clearExplicitLookupLoading();
+      this.cancelBoeDiscovery();
       this.selectedJurisdiction = jurisdictionSelect.value as LawJurisdiction;
       this.selectedLaw = null;
       this.currentSection = null;
@@ -193,8 +216,16 @@ export class LawLookupModal extends Modal {
   }
 
   onClose() {
+    this.clearModalContainerClass();
+    this.clearExplicitLookupLoading();
+    this.cancelBoeDiscovery();
     this.contentEl.empty();
     this.settingsStore.onClose?.();
+  }
+
+  private clearModalContainerClass(): void {
+    this.modalContainerEl?.removeClass("de-law-lookup-modal-container");
+    this.modalContainerEl = null;
   }
 
   setInputLayout(layout: InputLayout): boolean {
@@ -225,8 +256,10 @@ export class LawLookupModal extends Modal {
   }
 
   private async renderParsedReference() {
+    this.cancelBoeDiscovery();
     this.suggestionsEl?.empty();
     const lookupId = this.lookupSequence.next();
+    this.clearExplicitLookupLoading();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
       this.lookupInputValue(),
       this.selectedJurisdiction,
@@ -248,6 +281,7 @@ export class LawLookupModal extends Modal {
         : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
+    this.renderExplicitLookupLoading(lookupId);
 
     try {
       const section = await this.providerRegistry.getSection(parsed);
@@ -272,17 +306,132 @@ export class LawLookupModal extends Modal {
             ? this.ui.euLanguageExpressionUnavailable
               : this.ui.unexpectedLookupFailure,
       );
+    } finally {
+      if (this.lookupSequence.isCurrent(lookupId)) {
+        this.clearExplicitLookupLoading(lookupId);
+      }
     }
   }
 
+  private renderExplicitLookupLoading(lookupId: number): void {
+    this.explicitLookupPendingId = lookupId;
+    this.resultEl?.setAttribute?.("aria-busy", "true");
+    this.explicitLookupLoadingEl = this.resultEl.createDiv({ cls: "de-law-lookup-loading" });
+    this.explicitLookupLoadingEl?.setAttribute?.("role", "status");
+    this.explicitLookupLoadingEl?.setAttribute?.("aria-label", "Loading law text");
+  }
+
+  private clearExplicitLookupLoading(lookupId?: number): void {
+    if (lookupId !== undefined && this.explicitLookupPendingId !== lookupId) return;
+    this.explicitLookupPendingId = null;
+    this.resultEl?.setAttribute?.("aria-busy", "false");
+    this.explicitLookupLoadingEl?.remove?.();
+    this.explicitLookupLoadingEl = null;
+  }
+
   private renderMetadataSuggestions(): void {
+    this.cancelBoeDiscovery();
     this.suggestionsEl.empty();
-    if (this.selectedJurisdiction === "ES") return;
+    if (this.selectedJurisdiction === "ES") {
+      if (this.canonicalizeDirectSpanishBoeInput()) return;
+      const query = this.boeDiscoveryQuery();
+      if (!this.boeDiscovery || query.trim().length < 2) return;
+      if (this.selectedLaw && this.inputStillHasSelectedLawPrefix()) return;
+
+      const revision = this.boeDiscoveryRevision;
+      const schedule = () => {
+        this.boeDiscoveryTimer = null;
+        void this.loadBoeSuggestions(query, revision);
+      };
+      this.boeDiscoveryTimer = typeof window === "undefined"
+        ? globalThis.setTimeout(schedule, 250)
+        : window.setTimeout(schedule, 250);
+      return;
+    }
     const suggestions = searchLawMetadata({
       query: this.lawInputValue(),
       jurisdiction: this.selectedJurisdiction,
       entries: this.metadataSearchEntries(),
     });
+
+    this.renderSuggestionButtons(suggestions);
+  }
+
+  private canonicalizeDirectSpanishBoeInput(): boolean {
+    const decomposed = this.inputLayout === "single"
+      ? decomposeOneLineLookupInput(this.lawInputValue(), "ES")
+      : null;
+    const law = decomposed?.law ?? this.lawInputValue();
+    const normalizedLaw = law.trim();
+    if (!COMPLETE_SPANISH_BOE_IDENTIFIER.test(normalizedLaw)) return false;
+
+    const canonicalLaw = normalizedLaw.toUpperCase();
+    if (this.inputLayout === "split") {
+      this.lawInputEl.value = canonicalLaw;
+    } else {
+      this.inputEl.value = decomposed
+        ? `${canonicalLaw} ${decomposed.reference}`
+        : canonicalLaw;
+    }
+    return true;
+  }
+
+  private async loadBoeSuggestions(query: string, revision: number): Promise<void> {
+    if (!this.boeDiscovery) return;
+    if (!this.isCurrentBoeDiscovery(query, revision)) return;
+
+    this.renderBoeDiscoveryLoading(query, revision);
+
+    try {
+      const result = await this.boeDiscovery.search(query);
+      if (!this.isCurrentBoeDiscovery(query, revision)) return;
+      if (result.kind === "no-results") {
+        this.renderBoeDiscoveryStatus("no-results");
+        return;
+      }
+
+      const suggestions: LawMetadataSuggestion[] = result.entries.map((entry) => ({
+        ...entry,
+        matchKind: "title-contains",
+      }));
+      if (suggestions.length === 0) {
+        this.renderBoeDiscoveryStatus("no-results");
+        return;
+      }
+      this.suggestionsEl.empty();
+      this.renderSuggestionButtons(suggestions);
+    } catch (error) {
+      if (!this.isCurrentBoeDiscovery(query, revision)) return;
+      this.renderBoeDiscoveryStatus(
+        error instanceof BoeLawDiscoveryUnavailableError
+          ? "unavailable"
+          : error instanceof BoeLawDiscoveryMalformedResponseError
+            ? "malformed"
+          : "unavailable",
+      );
+    } finally {
+      this.clearBoeDiscoveryLoading(query, revision);
+    }
+  }
+
+  private renderBoeDiscoveryLoading(query: string, revision: number): void {
+    this.boeDiscoveryPending = { query, revision };
+    this.suggestionsEl.empty();
+    this.suggestionsEl.setAttribute("aria-busy", "true");
+    this.boeDiscoveryLoadingEl = this.suggestionsEl.createDiv({ cls: "de-law-lookup-loading" });
+    this.boeDiscoveryLoadingEl.setAttribute("role", "status");
+    this.boeDiscoveryLoadingEl.setAttribute("aria-label", "Loading law suggestions");
+  }
+
+  private clearBoeDiscoveryLoading(query: string, revision: number): void {
+    if (this.boeDiscoveryPending?.query !== query || this.boeDiscoveryPending.revision !== revision) return;
+    this.boeDiscoveryPending = null;
+    this.suggestionsEl.setAttribute("aria-busy", "false");
+    this.boeDiscoveryLoadingEl?.remove();
+    this.boeDiscoveryLoadingEl = null;
+  }
+
+  private renderSuggestionButtons(suggestions: LawMetadataSuggestion[]): void {
 
     for (const suggestion of suggestions) {
       const button = this.suggestionsEl.createEl("button", {
@@ -300,6 +449,50 @@ export class LawLookupModal extends Modal {
         this.selectedLaw = suggestion;
         this.renderSelectedLawStatus();
       });
+    }
+  }
+
+  private renderBoeDiscoveryStatus(status: "no-results" | "unavailable" | "malformed"): void {
+    this.suggestionsEl.empty();
+    const message = status === "no-results"
+      ? "BOE: no matching laws."
+      : status === "unavailable"
+        ? "BOE: discovery source unavailable."
+        : "BOE: discovery response invalid.";
+    const statusEl = this.suggestionsEl.createDiv({
+      cls: "de-law-lookup-discovery-status",
+      text: message,
+    });
+    statusEl.setAttribute("data-discovery-status", status);
+  }
+
+  private boeDiscoveryQuery(): string {
+    if (this.selectedJurisdiction !== "ES") return this.lawInputValue();
+    if (this.inputLayout === "single") {
+      return decomposeOneLineLookupInput(this.lawInputValue(), "ES")?.law ?? this.lawInputValue();
+    }
+    return this.lawInputValue();
+  }
+
+  private isCurrentBoeDiscovery(query: string, revision: number): boolean {
+    return this.selectedJurisdiction === "ES"
+      && this.boeDiscoveryRevision === revision
+      && this.boeDiscoveryQuery() === query;
+  }
+
+  private cancelBoeDiscovery(): void {
+    this.boeDiscoveryRevision += 1;
+    this.boeDiscoveryPending = null;
+    this.boeDiscoveryLoadingEl?.remove();
+    this.boeDiscoveryLoadingEl = null;
+    this.suggestionsEl?.setAttribute?.("aria-busy", "false");
+    if (this.boeDiscoveryTimer !== null) {
+      if (typeof window === "undefined") {
+        globalThis.clearTimeout(this.boeDiscoveryTimer as ReturnType<typeof globalThis.setTimeout>);
+      } else {
+        window.clearTimeout(this.boeDiscoveryTimer as number);
+      }
+      this.boeDiscoveryTimer = null;
     }
   }
 

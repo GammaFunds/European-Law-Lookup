@@ -28,6 +28,7 @@ import {
   getSupportedFedlexLaws,
 } from "./law/providers/fedlexMapping";
 import { getSupportedBoeLaws } from "./law/providers/boeMapping";
+import { BoeLawDiscovery } from "./law/providers/BoeLawDiscovery";
 import {
   normalizeFedlexLanguage,
   type OfficialTitlesByLanguage,
@@ -163,6 +164,7 @@ export default class DeLawPlugin extends Plugin {
           },
           this.uiStrings,
           this.createIndexProvider(),
+          new BoeLawDiscovery(createObsidianRequestUrlTransport(requestUrl)),
         );
         this.activeLawLookupModal = modal;
         modal.open();

@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import type { App } from "obsidian";
 import type { EuActIndex, EuActIndexEntry } from "../src/law/euActIndex";
@@ -12,33 +14,57 @@ type Listener = (event?: unknown) => void;
 class FakeElement {
   children: FakeElement[] = [];
   listeners: Record<string, Listener[]> = {};
+  attributes: Record<string, string> = {};
   text = "";
   value = "";
   tag = "";
+  parentElement: FakeElement | null = null;
+  private readonly classes = new Set<string>();
 
-  createEl(tag: string, options?: { text?: string; value?: string }): FakeElement {
+  createEl(tag: string, options?: { text?: string; value?: string; cls?: string; attr?: Record<string, string> }): FakeElement {
     const child = new FakeElement();
     child.tag = tag;
     child.text = options?.text ?? "";
     child.value = options?.value ?? "";
+    child.applyOptions(options);
+    child.parentElement = this;
     this.children.push(child);
     return child;
   }
 
-  createDiv(options?: { text?: string }): FakeElement {
+  createDiv(options?: { text?: string; cls?: string; attr?: Record<string, string> }): FakeElement {
     const child = new FakeElement();
     child.text = options?.text ?? "";
+    child.applyOptions(options);
+    child.parentElement = this;
     this.children.push(child);
     return child;
   }
 
-  addClass(_cls: string): void {}
+  private applyOptions(options?: { cls?: string; attr?: Record<string, string> }): void {
+    if (options?.cls) this.addClass(options.cls);
+    for (const [name, value] of Object.entries(options?.attr ?? {})) {
+      this.setAttribute(name, value);
+    }
+  }
+
+  addClass(cls: string): void { this.classes.add(cls); }
+  removeClass(cls: string): void { this.classes.delete(cls); }
+  hasClass(cls: string): boolean { return this.classes.has(cls); }
+  classCount(): number { return this.classes.size; }
 
   empty(): void {
     this.children = [];
   }
 
-  remove(): void {}
+  remove(): void {
+    if (!this.parentElement) return;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    this.parentElement = null;
+  }
+
+  setAttribute(name: string, value: string): void { this.attributes[name] = value; }
+  getAttribute(name: string): string | null { return this.attributes[name] ?? null; }
 
   insertBefore(child: FakeElement, _reference: FakeElement): void {
     this.children.unshift(child);
@@ -55,6 +81,12 @@ class FakeElement {
 
 class FakeModal {
   contentEl = new FakeElement();
+  modalEl = new FakeElement();
+  modalContainerEl = new FakeElement();
+
+  constructor() {
+    this.modalEl.parentElement = this.modalContainerEl;
+  }
 }
 
 class FakeNotice {
@@ -201,6 +233,7 @@ function loadWithObsidianStub<T>(load: () => T): T {
 
 interface LawLookupModalLike {
   onOpen(): void;
+  onClose(): void;
   setInputLayout(layout: "single" | "split"): boolean;
 }
 
@@ -260,6 +293,21 @@ interface ModalHarness {
   jurisdictionSelect: FakeElement;
   modal: LawLookupModalLike;
   lastRequest(): CapturedRequest;
+}
+
+interface LookupDomState {
+  resultEl: FakeElement;
+  lookupLoadingEl?: FakeElement | null;
+}
+
+function lookupDomState(harness: ModalHarness): LookupDomState {
+  return harness.modal as unknown as LookupDomState;
+}
+
+function explicitLookupSpinner(harness: ModalHarness): FakeElement | undefined {
+  return lookupDomState(harness).resultEl.children.find(
+    (child) => child.hasClass("de-law-lookup-loading"),
+  );
 }
 
 function settle(): Promise<void> {
@@ -537,6 +585,167 @@ describe("LawLookupModal EU requested language preservation", () => {
   });
 });
 
+describe("LawLookupModal explicit lookup pending state", () => {
+  it("shows a result-region spinner immediately and keeps it while retrieval is pending", async () => {
+    let resolvePending!: (section: LawSection) => void;
+    const pending = new Promise<LawSection>((resolve) => { resolvePending = resolve; });
+    const harness = buildModalHarness(null, async () => pending);
+
+    await runLookup(harness, GDPR_INPUT);
+
+    assert.ok(explicitLookupSpinner(harness));
+    assert.equal(lookupDomState(harness).resultEl.getAttribute("aria-busy"), "true");
+
+    resolvePending(successfulSection);
+    await settle();
+    assert.equal(explicitLookupSpinner(harness), undefined);
+    assert.equal(lookupDomState(harness).resultEl.getAttribute("aria-busy"), "false");
+  });
+
+  it("clears the spinner after a successful result", async () => {
+    const harness = buildModalHarness(null, async () => successfulSection);
+    await runLookup(harness, GDPR_INPUT);
+    assert.equal(explicitLookupSpinner(harness), undefined);
+  });
+
+  it("clears the spinner after a no-result response", async () => {
+    let resolveNoResult!: (section: LawSection | null) => void;
+    const noResult = new Promise<LawSection | null>((resolve) => { resolveNoResult = resolve; });
+    const harness = buildModalHarness(null, async () => noResult);
+    harness.inputEl.value = GDPR_INPUT;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.ok(explicitLookupSpinner(harness));
+    resolveNoResult(null);
+    await settle();
+    assert.equal(explicitLookupSpinner(harness), undefined);
+  });
+
+  it("clears the spinner after provider and generic errors", async () => {
+    for (const error of [new Error("provider-error"), new Error("generic-error")]) {
+      let rejectLookup!: (reason: unknown) => void;
+      const rejected = new Promise<LawSection>((_resolve, reject) => { rejectLookup = reject; });
+      const harness = buildModalHarness(null, async () => rejected);
+      harness.inputEl.value = GDPR_INPUT;
+      harness.inputEl.fire("keydown", { key: "Enter" });
+      await settle();
+      assert.ok(explicitLookupSpinner(harness));
+      rejectLookup(error);
+      await settle();
+      assert.equal(explicitLookupSpinner(harness), undefined);
+    }
+  });
+
+  it("does not create a spinner for synchronous citation validation failure", async () => {
+    const harness = buildModalHarness(null);
+    await runLookup(harness, "not a citation");
+    assert.equal(harness.requests.length, 0);
+    assert.equal(explicitLookupSpinner(harness), undefined);
+  });
+
+  it("keeps the newer spinner and state when an older request settles", async () => {
+    let resolveFirst!: (section: LawSection) => void;
+    let resolveSecond!: (section: LawSection) => void;
+    const first = new Promise<LawSection>((resolve) => { resolveFirst = resolve; });
+    const second = new Promise<LawSection>((resolve) => { resolveSecond = resolve; });
+    let call = 0;
+    const harness = buildModalHarness(null, async () => (++call === 1 ? first : second));
+
+    harness.inputEl.value = GDPR_INPUT;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    harness.inputEl.value = "32024R1689 Art. 1";
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.ok(explicitLookupSpinner(harness));
+
+    resolveFirst(successfulSection);
+    await settle();
+    assert.ok(explicitLookupSpinner(harness));
+    assert.equal((harness.modal as unknown as { currentSection: LawSection | null }).currentSection, null);
+
+    resolveSecond({ ...successfulSection, lawCode: "32024R1689" });
+    await settle();
+    assert.equal(explicitLookupSpinner(harness), undefined);
+    assert.equal((harness.modal as unknown as { currentSection: LawSection | null }).currentSection?.lawCode, "32024R1689");
+  });
+
+  it("clears the spinner when a pending lookup is invalidated or the modal closes", async () => {
+    let resolvePending!: (section: LawSection) => void;
+    const pending = new Promise<LawSection>((resolve) => { resolvePending = resolve; });
+    const harness = buildModalHarness(null, async () => pending);
+    await runLookup(harness, GDPR_INPUT);
+    assert.ok(explicitLookupSpinner(harness));
+
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(explicitLookupSpinner(harness), undefined);
+
+    harness.jurisdictionSelect.value = "EU";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = GDPR_INPUT;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.ok(explicitLookupSpinner(harness));
+    harness.modal.onClose();
+    assert.equal(explicitLookupSpinner(harness), undefined);
+    resolvePending(successfulSection);
+  });
+});
+
+describe("LawLookupModal suggestion layout contract", () => {
+  it("uses content-driven button boxes for wrapped suggestions", () => {
+    const styles = readFileSync(resolve(__dirname, "../../styles.css"), "utf8");
+    const suggestionRule = styles.match(
+      /\.de-law-lookup-suggestion\s*\{([\s\S]*?)\n\}/u,
+    )?.[1] ?? "";
+
+    assert.match(suggestionRule, /height:\s*auto\s*;/u);
+    assert.match(suggestionRule, /min-height:\s*var\(--input-height\)\s*;/u);
+    assert.match(suggestionRule, /line-height:\s*1\.4\s*;/u);
+    assert.match(suggestionRule, /overflow-wrap:\s*anywhere\s*;/u);
+    assert.match(suggestionRule, /flex:\s*0\s+0\s+auto\s*;/u);
+  });
+
+  it("applies and cleans up a scoped host class across reopen cycles", () => {
+    const harness = buildModalHarness(null);
+    const modalState = harness.modal as unknown as {
+      modalEl: FakeElement;
+    };
+    const ownHost = modalState.modalEl.parentElement;
+    assert.ok(ownHost);
+    const unrelatedHost = new FakeModal().modalContainerEl;
+
+    assert.equal(ownHost.hasClass("de-law-lookup-modal-container"), true);
+    assert.equal(ownHost.classCount(), 1);
+    assert.equal(unrelatedHost.hasClass("de-law-lookup-modal-container"), false);
+
+    harness.modal.onClose();
+    assert.equal(ownHost.hasClass("de-law-lookup-modal-container"), false);
+    harness.modal.onOpen();
+    assert.equal(ownHost.hasClass("de-law-lookup-modal-container"), true);
+    assert.equal(ownHost.classCount(), 1);
+    assert.equal(unrelatedHost.hasClass("de-law-lookup-modal-container"), false);
+  });
+
+  it("defines a scoped start-alignment contract for the modal host without :has", () => {
+    const styles = readFileSync(resolve(__dirname, "../../styles.css"), "utf8");
+    const hostRule = styles.match(
+      /\.de-law-lookup-modal-container\s*\{([\s\S]*?)\n\}/u,
+    )?.[1] ?? "";
+
+    assert.match(hostRule, /align-items:\s*flex-start\s*;/u);
+    assert.match(
+      hostRule,
+      /padding-block-start:\s*clamp\(\s*var\(--size-4-4\)\s*,\s*6vh\s*,\s*calc\(var\(--size-4-8\)\s*\*\s*2\)\s*\)\s*;/u,
+    );
+    assert.doesNotMatch(hostRule, /position\s*:\s*(?:absolute|fixed)\s*;/u);
+    assert.doesNotMatch(styles, /(?:^|\n)\s*\.modal-container\s*\{/u);
+    assert.doesNotMatch(styles, /:has\(/u);
+  });
+
+});
+
 describe("LawLookupModal CH official language selection", () => {
   it("sends the selected Swiss language to Fedlex and persists it", async () => {
     FakeSetting.instances = [];
@@ -628,6 +837,7 @@ describe("LawLookupModal CH official language selection", () => {
 
     assert.deepEqual(requests, [{ language: undefined }]);
   });
+
 });
 
 describe("LawLookupModal test harness module-state isolation", () => {

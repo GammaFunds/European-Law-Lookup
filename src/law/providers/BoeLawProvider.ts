@@ -8,8 +8,24 @@ const RECORD_BASE_URL = "https://www.boe.es/buscar/act.php?id=";
 const BOE_ID = /^BOE-A-(\d{4})-(\d{1,5})$/i;
 
 interface BoeMetadata { identificador: string; titulo: string; url_html_consolidada: string; url_eli: string; }
-interface BoeIndexEntry { id: string; titulo: string; }
+interface BoeIndexEntry {
+  id: string;
+  titulo: string;
+  fecha_actualizacion?: string;
+  url?: string;
+}
 interface BoeVersion { date: string; html: string; }
+
+const BOE_BLOCK_TYPES = new Set([
+  "nota_inicial",
+  "precepto",
+  "encabezado",
+  "firma",
+  "parte_dispositiva",
+  "parte_final",
+  "preambulo",
+  "instrumento",
+]);
 
 export class BoeLawProvider implements LawProvider {
   readonly id = "boe";
@@ -26,13 +42,13 @@ export class BoeLawProvider implements LawProvider {
     if (!BOE_ID.test(lawCode)) return null;
 
     try {
-      const metadataResponse = await this.request(this.url(lawCode, "metadatos"));
+      const metadataResponse = await this.request(this.url(lawCode, "metadatos"), "application/json");
       if (metadataResponse.status === 404) return null;
       this.requireOk(metadataResponse, "metadata");
       const metadata = this.parseMetadata(await metadataResponse.json(), lawCode);
       if (!metadata) return null;
 
-      const recordResponse = await this.request(this.recordUrl(lawCode));
+      const recordResponse = await this.request(this.recordUrl(lawCode), "text/html");
       this.requireOk(recordResponse, "official record");
       const officialPageWork = this.parseOfficialPageWork(
         await this.readText(recordResponse, "official record"),
@@ -41,7 +57,7 @@ export class BoeLawProvider implements LawProvider {
         throw new Error("BOE official-page ELI identity mismatch");
       }
 
-      const eliResponse = await this.request(this.url(lawCode, "metadata-eli"));
+      const eliResponse = await this.request(this.url(lawCode, "metadata-eli"), "application/xml");
       this.requireOk(eliResponse, "ELI metadata");
       const currentVersionDate = this.parseCurrentVersionDate(
         await this.readText(eliResponse, "ELI metadata"),
@@ -49,12 +65,15 @@ export class BoeLawProvider implements LawProvider {
         lawCode,
       );
 
-      const indexResponse = await this.request(this.url(lawCode, "texto/indice"));
+      const indexResponse = await this.request(this.url(lawCode, "texto/indice"), "application/json");
       this.requireOk(indexResponse, "block index");
-      const blockId = this.findBlockId(await indexResponse.json(), reference.section);
+      const blockId = await this.findBlockId(await indexResponse.json(), reference.section, lawCode);
       if (!blockId) return null;
 
-      const blockResponse = await this.request(this.url(lawCode, `texto/bloque/${encodeURIComponent(blockId)}`));
+      const blockResponse = await this.request(
+        this.url(lawCode, `texto/bloque/${encodeURIComponent(blockId)}`),
+        "application/xml",
+      );
       if (blockResponse.status === 404) return null;
       this.requireOk(blockResponse, "block");
       const blockXml = await this.readText(blockResponse, "block");
@@ -89,8 +108,8 @@ export class BoeLawProvider implements LawProvider {
 
   private recordUrl(id: string): string { return `${RECORD_BASE_URL}${encodeURIComponent(id)}`; }
 
-  private async request(url: string): Promise<LawProviderHttpResponse> {
-    try { return await this.fetchFn(url, { headers: { Accept: "application/json, application/xml" } }); }
+  private async request(url: string, accept: string): Promise<LawProviderHttpResponse> {
+    try { return await this.fetchFn(url, { headers: { Accept: accept } }); }
     catch (error) { throw new LawProviderUnavailableError(this.id, `BOE request failed: ${url}`, error); }
   }
 
@@ -110,7 +129,16 @@ export class BoeLawProvider implements LawProvider {
     if (!item || typeof item !== "object") throw new Error("Malformed BOE metadata");
     const metadata = item as Partial<BoeMetadata>;
     if (metadata.identificador !== requestedId) return null;
-    if (!metadata.titulo || !metadata.url_html_consolidada || !metadata.url_eli) throw new Error("Incomplete BOE metadata");
+    if (
+      typeof metadata.titulo !== "string"
+      || !metadata.titulo.trim()
+      || typeof metadata.url_html_consolidada !== "string"
+      || !isCanonicalConsolidatedRecordUrl(metadata.url_html_consolidada, requestedId)
+      || typeof metadata.url_eli !== "string"
+      || !metadata.url_eli.trim()
+    ) {
+      throw new Error("Malformed or incomplete BOE metadata");
+    }
     return metadata as BoeMetadata;
   }
 
@@ -130,48 +158,156 @@ export class BoeLawProvider implements LawProvider {
   }
 
   private parseCurrentVersionDate(xml: string, expectedWork: string, requestedId: string): string {
-    const root = parseXmlDocument(xml, "rdf:RDF");
-    const expressions = root.children.filter((child) => child.name.toLowerCase() === "eli:legalexpression");
-    const spanishExpressions = expressions.filter((expression) => {
+    const root = parseXmlDocument(xml, "response");
+    const data = singleChild(root, "data");
+    const metadataEli = singleChild(data, "metadata-eli");
+    const rdf = singleChild(metadataEli, "rdf:RDF");
+    const resources = descendantsNamed(rdf, "eli:LegalResource");
+    const candidates: string[] = [];
+    const resourcePattern = new RegExp(`^${escapeRegExp(expectedWork)}/con/(\\d{8})$`, "i");
+
+    for (const resource of resources) {
+      const resourceAbout = readAttribute(resource.attributes, "rdf:about");
+      const resourceMatch = resourceAbout?.match(resourcePattern);
+      if (!resourceMatch) continue;
+
+      const localId = requiredSingleText(resource, "eli:id_local");
+      if (!BOE_ID.test(localId) || localId !== requestedId) {
+        throw new Error("BOE ELI local identity mismatch");
+      }
+
+      const memberOf = resource.children.filter(
+        (child) => child.name.toLowerCase() === "eli:is_member_of",
+      );
+      if (memberOf.length !== 1 || readAttribute(memberOf[0].attributes, "rdf:resource") !== expectedWork) {
+        throw new Error("BOE ELI work identity mismatch");
+      }
+
+      const date = requiredSingleText(resource, "eli:version_date");
+      if (!isCalendarDate(date) || compactDate(date) !== resourceMatch[1]) {
+        throw new Error("BOE ELI metadata contains an invalid version date");
+      }
+
+      const realizations = resource.children.filter(
+        (child) => child.name.toLowerCase() === "eli:is_realized_by",
+      );
+      if (realizations.length !== 1) {
+        throw new Error("BOE ELI metadata contains an ambiguous realization");
+      }
+      const expressions = realizations[0].children.filter(
+        (child) => child.name.toLowerCase() === "eli:legalexpression",
+      );
+      if (expressions.length !== 1) {
+        throw new Error("BOE ELI metadata contains an ambiguous consolidated expression");
+      }
+      const expression = expressions[0];
+      const expressionAbout = readAttribute(expression.attributes, "rdf:about");
+      if (expressionAbout !== `${resourceAbout}/spa`) {
+        throw new Error("BOE ELI expression identity mismatch");
+      }
       const language = singleChild(expression, "eli:language");
-      return language ? readAttribute(language.attributes, "rdf:resource")?.toLowerCase().endsWith("/spa") : false;
-    });
-    if (spanishExpressions.length !== 1) throw new Error("BOE ELI metadata contains an ambiguous Spanish expression");
-    const expression = spanishExpressions[0];
-    const expressionAbout = readAttribute(expression.attributes, "rdf:about");
-    if (!expressionAbout || !new RegExp(`^${escapeRegExp(expectedWork)}/con/\\d{8}/spa(?:/html)?$`, "i").test(expressionAbout)) {
-      throw new Error("BOE ELI expression identity mismatch");
+      if (readAttribute(language.attributes, "rdf:resource")?.toLowerCase() !== "http://www.elidata.es/mdr/authority/language/spa") {
+        throw new Error("BOE ELI language identity mismatch");
+      }
+      const realizes = singleChild(expression, "eli:realizes");
+      if (readAttribute(realizes.attributes, "rdf:resource") !== resourceAbout) {
+        throw new Error("BOE ELI expression work identity mismatch");
+      }
+      candidates.push(date);
     }
-    const localId = requiredSingleText(expression, "eli:id_local");
-    if (!BOE_ID.test(localId) || localId !== requestedId) throw new Error("BOE ELI local identity mismatch");
-    const works = expression.children.filter((child) => child.name.toLowerCase() === "eli:legal_expression_belongs_to_work");
-    if (works.length !== 1 || readAttribute(works[0].attributes, "rdf:resource") !== expectedWork) {
-      throw new Error("BOE ELI work identity mismatch");
+
+    const applicable = candidates.filter((date) => date <= new Date().toISOString().slice(0, 10));
+    const latest = applicable.reduce<string | null>(
+      (current, date) => current === null || date > current ? date : current,
+      null,
+    );
+    if (latest === null || applicable.filter((date) => date === latest).length !== 1) {
+      throw new Error("BOE ELI metadata contains no unique applicable Spanish consolidated expression");
     }
-    const date = requiredSingleText(expression, "eli:version_date");
-    if (!isCalendarDate(date)) throw new Error("BOE ELI metadata contains an invalid version date");
-    return date;
+    return latest;
   }
 
-  private findBlockId(value: unknown, section: string): string | null {
+  private async findBlockId(value: unknown, section: string, lawCode: string): Promise<string | null> {
     const root = value as { data?: unknown };
     if (Array.isArray(root.data) && root.data.length !== 1) throw new Error("Ambiguous BOE index envelope");
     const data = Array.isArray(root.data) ? (root.data as unknown[])[0] : root.data;
-    const entries = data && typeof data === "object" && Array.isArray((data as { bloque?: unknown }).bloque)
-      ? (data as { bloque: unknown[] }).bloque : [];
-    const target = normalizeSection(section);
-    const matches = entries.filter((entry): entry is BoeIndexEntry => {
-      if (!entry || typeof entry !== "object") return false;
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Malformed BOE index envelope");
+    const rawEntries = (data as { bloque?: unknown }).bloque;
+    if (!Array.isArray(rawEntries)) throw new Error("Malformed BOE index entries");
+    const seenIds = new Set<string>();
+    const entries = rawEntries.map((entry): BoeIndexEntry => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Malformed BOE index entry");
       const candidate = entry as Partial<BoeIndexEntry>;
-      return typeof candidate.id === "string" && typeof candidate.titulo === "string" && normalizeIndexTitle(candidate.titulo) === target;
+      const id = candidate.id;
+      if (typeof id !== "string" || !id.trim()) throw new Error("Incomplete BOE index entry");
+      if (candidate.titulo !== undefined && typeof candidate.titulo !== "string") throw new Error("Malformed BOE index entry title");
+      if (candidate.fecha_actualizacion !== undefined && typeof candidate.fecha_actualizacion !== "string") {
+        throw new Error("Malformed BOE index entry date");
+      }
+      if (candidate.url !== undefined && typeof candidate.url !== "string") throw new Error("Malformed BOE index entry URL");
+      if (seenIds.has(id)) throw new Error("Duplicate BOE index block ID");
+      seenIds.add(id);
+      return {
+        id,
+        titulo: candidate.titulo ?? "",
+        fecha_actualizacion: candidate.fecha_actualizacion,
+        url: candidate.url,
+      };
     });
+
+    for (const entry of entries) {
+      if (entry.titulo.trim()) continue;
+      const blockResponse = await this.request(
+        this.url(lawCode, `texto/bloque/${encodeURIComponent(entry.id)}`),
+        "application/xml",
+      );
+      this.requireOk(blockResponse, "blank-title block classification");
+      const blockXml = await this.readText(blockResponse, "blank-title block classification");
+      const type = this.parseStructuralBlockType(blockXml, entry.id);
+      if (type === "precepto") throw new Error("Blank-title BOE index entry is a referenceable precepto");
+    }
+
+    const target = normalizeSection(section);
+    const matches = entries.filter((entry) => normalizeIndexTitle(entry.titulo) === target);
     if (matches.length > 1) throw new Error("Ambiguous BOE article index");
     return matches[0]?.id ?? null;
   }
 
+  private parseStructuralBlockType(xml: string, expectedId: string): string {
+    const response = parseXmlDocument(xml, "response");
+    const data = singleChild(response, "data");
+    const block = singleChild(data, "bloque");
+    if (readAttribute(block.attributes, "id") !== expectedId) throw new Error("BOE blank-title block identity mismatch");
+    const type = readAttribute(block.attributes, "tipo");
+    if (!type || !BOE_BLOCK_TYPES.has(type)) throw new Error("BOE blank-title block has an invalid type");
+    const title = readAttribute(block.attributes, "titulo");
+    if (title === null && type === "precepto") throw new Error("Blank-title BOE index entry is a referenceable precepto");
+    if (title !== null && type !== "precepto" && looksLikeArticleTitle(title)) throw new Error("BOE blank-title block has a contradictory article title");
+    if (block.children.length === 0 || block.children.some((child) => child.name.toLowerCase() !== "version")) {
+      throw new Error("BOE blank-title block has malformed versions");
+    }
+    if (block.children.some((child) => hasDescendantNamed(child, "version"))) {
+      throw new Error("BOE blank-title block contains a nested version");
+    }
+    for (const version of block.children) {
+      const idNorma = readAttribute(version.attributes, "id_norma");
+      const publicationDate = normalizeBoeDate(readAttribute(version.attributes, "fecha_publicacion"));
+      const effectiveDateAttribute = readAttribute(version.attributes, "fecha_vigencia");
+      const effectiveDate = effectiveDateAttribute === null ? null : normalizeBoeDate(effectiveDateAttribute);
+      if (!idNorma || !BOE_ID.test(idNorma) || !publicationDate || (effectiveDateAttribute !== null && !effectiveDate)) {
+        throw new Error("BOE blank-title block has invalid version identity or date");
+      }
+      if (version.children.length === 0) throw new Error("BOE blank-title block contains an empty version");
+    }
+    return type;
+  }
+
   private parseBlock(xml: string, blockId: string, requestedSection: string, currentDate: string): { heading?: string; text: string; validFrom?: string } | null {
-    const block = parseXmlDocument(xml, "bloque");
+    const response = parseXmlDocument(xml, "response");
+    const data = singleChild(response, "data");
+    const block = singleChild(data, "bloque");
     if (readAttribute(block.attributes, "id") !== blockId) throw new Error("BOE block identity mismatch");
+    if (readAttribute(block.attributes, "tipo") !== "precepto") throw new Error("BOE selected block is not a precepto");
     const target = normalizeSection(requestedSection);
     const blockTitle = readAttribute(block.attributes, "titulo");
     if (!blockTitle || normalizeIndexTitle(blockTitle) !== target) throw new Error("BOE block article identity mismatch");
@@ -179,8 +315,8 @@ export class BoeLawProvider implements LawProvider {
     if (block.children.some((child) => hasDescendantNamed(child, "version"))) throw new Error("BOE block contains a nested version");
     const versions = block.children.map((node): BoeVersion => {
       const idNorma = readAttribute(node.attributes, "id_norma");
-      const date = readAttribute(node.attributes, "fecha_vigencia");
-      if (!idNorma || !BOE_ID.test(idNorma) || !date || !isCalendarDate(date)) throw new Error("BOE block version has invalid identity or effective date");
+      const date = normalizeBoeDate(readAttribute(node.attributes, "fecha_vigencia"));
+      if (!idNorma || !BOE_ID.test(idNorma) || !date) throw new Error("BOE block version has invalid identity or effective date");
       const article = singleChild(node, "p", (candidate) => /(?:^|\s)articulo(?:\s|$)/i.test(readAttribute(candidate.attributes, "class") ?? ""));
       if (!article || normalizeIndexTitle(textFromMarkup(article.innerXml)) !== target) throw new Error("BOE block version article identity mismatch");
       return { date, html: node.innerXml };
@@ -203,10 +339,22 @@ function isCalendarDate(value: string): boolean {
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
+function normalizeBoeDate(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = /^\d{8}$/.test(value)
+    ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
+    : value;
+  return isCalendarDate(normalized) ? normalized : null;
+}
+function compactDate(value: string): string { return value.replace(/-/g, ""); }
 function normalizeIndexTitle(title: string): string {
   const normalized = normalizeSection(title).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const match = normalized.match(/^art(?:iculo|\.?)\s+([^.:]+?)(?:[.:]\s.*)?$/i);
   return match?.[1]?.trim() ?? normalized;
+}
+function looksLikeArticleTitle(title: string): boolean {
+  const normalized = normalizeSection(title).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /^art(?:iculo|\.?)\s+/i.test(normalized);
 }
 interface XmlNode {
   name: string;
@@ -224,7 +372,7 @@ function readAttribute(attributes: string | Record<string, string>, name: string
   return attributes.match(new RegExp(`${name}=["']([^"']+)["']`, "i"))?.[1] ?? null;
 }
 
-function singleChild(node: XmlNode, name: string, predicate: (child: XmlNode) => boolean = () => true): XmlNode | null {
+function singleChild(node: XmlNode, name: string, predicate: (child: XmlNode) => boolean = () => true): XmlNode {
   const matches = node.children.filter((child) => child.name.toLowerCase() === name.toLowerCase() && predicate(child));
   if (matches.length !== 1) throw new Error(`BOE XML requires exactly one ${name}`);
   return matches[0];
@@ -240,6 +388,13 @@ function requiredSingleText(node: XmlNode, name: string): string {
 
 function hasDescendantNamed(node: XmlNode, name: string): boolean {
   return node.children.some((child) => child.name.toLowerCase() === name.toLowerCase() || hasDescendantNamed(child, name));
+}
+
+function descendantsNamed(node: XmlNode, name: string): XmlNode[] {
+  return node.children.flatMap((child) => [
+    ...(child.name.toLowerCase() === name.toLowerCase() ? [child] : []),
+    ...descendantsNamed(child, name),
+  ]);
 }
 
 function parseXmlDocument(xml: string, expectedRoot: string): XmlNode {
@@ -333,6 +488,24 @@ function parseXmlAttributes(attributes: string): Record<string, string> {
   return result;
 }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+function isCanonicalConsolidatedRecordUrl(value: string | undefined, requestedId: string): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && url.hostname === "www.boe.es"
+      && url.port === ""
+      && url.username === ""
+      && url.password === ""
+      && url.pathname === "/buscar/act.php"
+      && url.hash === ""
+      && url.searchParams.get("id") === requestedId
+      && [...url.searchParams.keys()].length === 1;
+  } catch {
+    return false;
+  }
+}
 
 function isCanonicalConsolidatedEliUrl(value: string | undefined): value is string {
   if (!value) return false;

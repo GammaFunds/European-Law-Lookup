@@ -9,6 +9,15 @@
   flex: 1;
 }
 
+.de-law-lookup-modal-container {
+  align-items: flex-start;
+  padding-block-start: clamp(
+    var(--size-4-4),
+    6vh,
+    calc(var(--size-4-8) * 2)
+  );
+}
+
 .de-law-lookup-form label {
   flex: 0 0 100%;
   margin-top: 4px;
@@ -33,11 +42,35 @@
   gap: 4px;
 }
 
+.de-law-lookup-loading {
+  width: 14px;
+  height: 14px;
+  margin: 3px 0;
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  border-radius: 50%;
+  animation: de-law-lookup-loading-spin 0.8s linear infinite;
+}
+
+@keyframes de-law-lookup-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .de-law-lookup-loading { animation: none; }
+}
+
 .de-law-lookup-suggestion {
+  flex: 0 0 auto;
   width: 100%;
+  height: auto;
+  min-height: var(--input-height);
   padding: 7px 10px;
   text-align: left;
   white-space: normal;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
   border: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
 }

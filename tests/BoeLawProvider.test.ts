@@ -16,7 +16,10 @@ const metadata = {
 const ELI_WORK = "https://www.boe.es/eli/es/l/2015/10/01/40";
 const RECORD_URL = `https://www.boe.es/buscar/act.php?id=${ID}`;
 const recordPage = (permalinks: string[] = [`${ELI_WORK}/con`]) => `<html><body><dl><dt>Permalink ELI:</dt>${permalinks.map((permalink) => `<dd><a href="${permalink}">${permalink}</a></dd>`).join("")}</dl></body></html>`;
-const eli = `<rdf:RDF><eli:LegalExpression rdf:about="${ELI_WORK}/con/20240802/spa"><eli:id_local>${ID}</eli:id_local><eli:legal_expression_belongs_to_work rdf:resource="${ELI_WORK}"/><eli:version_date>2024-08-02</eli:version_date><eli:language rdf:resource="http://publications.europa.eu/resource/authority/language/SPA"/></eli:LegalExpression></rdf:RDF>`;
+// Captured from the official BOE metadata-eli endpoint on 2026-09-09.
+// The fixture keeps the production response/data/metadata-eli/rdf:RDF wrapper
+// and includes the original and consolidated LegalResource members.
+const eli = `<response><status><code>200</code><text>ok</text></status><data><metadata-eli><rdf:RDF><eli:LegalResource rdf:about="${ELI_WORK}"><eli:has_member><eli:LegalResource rdf:about="${ELI_WORK}/con/20240802"><eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">${ID}</eli:id_local><eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/><eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2024-08-02</eli:version_date><eli:is_member_of rdf:resource="${ELI_WORK}"/><eli:is_realized_by><eli:LegalExpression rdf:about="${ELI_WORK}/con/20240802/spa"><eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/><eli:realizes rdf:resource="${ELI_WORK}/con/20240802"/></eli:LegalExpression></eli:is_realized_by></eli:LegalResource></eli:has_member></eli:LegalResource></rdf:RDF></metadata-eli></data></response>`;
 const index = {
   data: [{ bloque: [
     { id: "a1", titulo: "Artículo 1" },
@@ -26,8 +29,11 @@ const index = {
 };
 const block = (id: string, versions: string) => {
   const title = id === "a1" ? "1" : id === "a103" ? "103" : "172 ter";
-  return `<bloque id="${id}" tipo="precepto" titulo="Artículo ${title}">${versions.replace(/Artículo 1/g, `Artículo ${title}`)}</bloque>`;
+  // Captured from the official BOE block endpoint on 2026-09-09.
+  return `<response><status><code>200</code><text>ok</text></status><data><bloque id="${id}" tipo="precepto" titulo="Artículo ${title}">${versions.replace(/Artículo 1/g, `Artículo ${title}`)}</bloque></data></response>`;
 };
+const structuralBlock = (id: string, tipo: string, titulo = "") =>
+  `<response><status><code>200</code><text>ok</text></status><data><bloque id="${id}" tipo="${tipo}" titulo="${titulo}"><version id_norma="${ID}" fecha_publicacion="2024-08-02" fecha_vigencia="2024-08-02"><p class="textoCompleto">structural block</p></version></bloque></data></response>`;
 const version = (date: string, text: string, id = "BOE-A-2015-10566") => `<version id_norma="${id}" fecha_vigencia="${date}" fecha_publicacion="${date}"><p class="articulo">Artículo 1</p><p class="parrafo">${text}</p><blockquote><p class="nota_pie">Texto editorial de modificación</p></blockquote></version>`;
 
 function response(body: unknown, status = 200, xml = false) {
@@ -42,19 +48,61 @@ function response(body: unknown, status = 200, xml = false) {
 
 function providerWith(routes: Record<string, ReturnType<typeof response>>) {
   const calls: string[] = [];
-  const provider = new BoeLawProvider("https://api.example/legislacion-consolidada", async (url) => {
+  const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+  const provider = new BoeLawProvider("https://api.example/legislacion-consolidada", async (url, options) => {
     calls.push(url);
+    requests.push({ url, headers: { ...(options?.headers ?? {}) } });
     const route = Object.entries(routes).find(([prefix]) => url.startsWith(prefix));
     if (!route && url === RECORD_URL) return response(recordPage());
     if (!route) throw new Error(`unexpected request: ${url}`);
     return route[1];
   });
-  return { provider, calls };
+  return { provider, calls, requests };
 }
 
 describe("BoeLawProvider", () => {
+  it("rejects truthy non-string required metadata fields at the metadata boundary", () => {
+    for (const field of ["titulo", "url_html_consolidada", "url_eli"] as const) {
+      const malformed = {
+        ...metadata.data[0],
+        [field]: field === "titulo" ? { unexpected: true } : 42,
+      };
+      const { provider } = providerWith({});
+      const parseMetadata = (provider as unknown as {
+        parseMetadata(value: unknown, requestedId: string): unknown;
+      }).parseMetadata.bind(provider);
+
+      assert.throws(
+        () => parseMetadata({ data: [malformed] }, ID),
+        /Malformed or incomplete BOE metadata/u,
+        field,
+      );
+    }
+  });
+
+  it("rejects a consolidated record URL that is not the exact BOE URL for the requested ID", () => {
+    for (const url_html_consolidada of [
+      "http://www.boe.es/buscar/act.php?id=BOE-A-2015-10566",
+      "https://example.test/buscar/act.php?id=BOE-A-2015-10566",
+      "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10565",
+      "not-a-url",
+      "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10566&extra=1",
+    ]) {
+      const { provider } = providerWith({});
+      const parseMetadata = (provider as unknown as {
+        parseMetadata(value: unknown, requestedId: string): unknown;
+      }).parseMetadata.bind(provider);
+
+      assert.throws(
+        () => parseMetadata({ data: [{ ...metadata.data[0], url_html_consolidada }] }, ID),
+        /Malformed or incomplete BOE metadata/u,
+        url_html_consolidada,
+      );
+    }
+  });
+
   it("accepts the current BOE work plus consolidated /con permalink shape", async () => {
-    const { provider, calls } = providerWith({
+    const { provider, calls, requests } = providerWith({
       [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
       [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
       [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
@@ -65,6 +113,133 @@ describe("BoeLawProvider", () => {
 
     assert.equal(calls[0], `https://api.example/legislacion-consolidada/id/${ID}/metadatos`);
     assert.equal(calls[1], RECORD_URL);
+    assert.deepEqual(requests.map(({ url, headers }) => ({
+      path: new URL(url).pathname,
+      accept: headers.Accept,
+    })), [
+      { path: `/legislacion-consolidada/id/${ID}/metadatos`, accept: "application/json" },
+      { path: `/buscar/act.php`, accept: "text/html" },
+      { path: `/legislacion-consolidada/id/${ID}/metadata-eli`, accept: "application/xml" },
+      { path: `/legislacion-consolidada/id/${ID}/texto/indice`, accept: "application/json" },
+      { path: `/legislacion-consolidada/id/${ID}/texto/bloque/a1`, accept: "application/xml" },
+    ]);
+  });
+
+  it("accepts the live compact BOE effective-date format", async () => {
+    const { provider } = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("20161002", "compact date text")), 200, true,
+      ),
+    });
+    const section = await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.equal(section?.validFrom, "2016-10-02");
+    assert.match(section?.text ?? "", /compact date text/);
+  });
+
+  it("resolves Article 1 through a production-shaped blank-title structural index entry", async () => {
+    const { provider, calls } = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response({
+        data: [{ bloque: [{ id: "co", titulo: "" }, { id: "a1", titulo: "Artículo 1. Objeto." }] }],
+      }),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("2024-08-02", "Article 1 text")), 200, true,
+      ),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/co`]: response(
+        structuralBlock("co", "encabezado"), 200, true,
+      ),
+    });
+
+    const section = await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.equal(section?.text, "Article 1 text");
+    assert.deepEqual(
+      calls.filter((url) => url.includes("/texto/bloque/")),
+      [
+        `https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/co`,
+        `https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`,
+      ],
+    );
+  });
+
+  it("accepts a production-shaped non-precepto block with an absent title", async () => {
+    const { provider } = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response({
+        data: [{ bloque: [{ id: "co", titulo: "" }, { id: "a1", titulo: "Artículo 1. Objeto." }] }],
+      }),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/co`]: response(
+        structuralBlock("co", "encabezado").replace(' titulo=""', ""),
+        200,
+        true,
+      ),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("2024-08-02", "Article 1 after absent-title classification")),
+        200,
+        true,
+      ),
+    });
+
+    const section = await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.equal(section?.text, "Article 1 after absent-title classification");
+  });
+
+  it("rejects blank-title entries that cannot be authoritatively classified as structural", async () => {
+    for (const [classifiedBlock, expectedBlockId] of [
+      [structuralBlock("co", "precepto"), "co"],
+      [structuralBlock("co", "precepto").replace(' titulo=""', ""), "co"],
+      [structuralBlock("other", "encabezado"), "co"],
+      [structuralBlock("co", ""), "co"],
+      [structuralBlock("co", "not-a-boe-type"), "co"],
+      [structuralBlock("co", "encabezado", "Artículo 1"), "co"],
+    ] as const) {
+      const { provider, calls } = providerWith({
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response({
+          data: [{ bloque: [{ id: "co", titulo: "" }, { id: "a1", titulo: "Artículo 1. Objeto." }] }],
+        }),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/${expectedBlockId}`]: response(
+          classifiedBlock,
+          200,
+          true,
+        ),
+      });
+
+      await assert.rejects(
+        provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+        LawProviderUnavailableError,
+      );
+      assert.equal(calls.some((url) => url.endsWith("/texto/bloque/a1")), false);
+    }
+  });
+
+  it("rejects duplicate structural IDs and duplicate matching Article 1 candidates globally", async () => {
+    for (const duplicateIndex of [
+      { data: [{ bloque: [{ id: "co", titulo: "" }, { id: "co", titulo: "" }, { id: "a1", titulo: "Artículo 1" }] }] },
+      { data: [{ bloque: [{ id: "a1", titulo: "Artículo 1" }, { id: "a1b", titulo: "Artículo 1. Otra candidate" }] }] },
+    ]) {
+      const { provider, calls } = providerWith({
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(duplicateIndex),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/co`]: response(
+          structuralBlock("co", "encabezado"),
+          200,
+          true,
+        ),
+      });
+
+      await assert.rejects(
+        provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+        LawProviderUnavailableError,
+      );
+      assert.equal(calls.some((url) => url.includes("/texto/bloque/")), false);
+    }
   });
 
   it("rejects a foreign official-page permalink before index or block retrieval", async () => {
@@ -163,7 +338,7 @@ describe("BoeLawProvider", () => {
     const foreignWork = "https://www.boe.es/eli/es/l/2015/10/01/39";
     const foreignMetadata = { data: [{ ...metadata.data[0], url_eli: foreignWork }] };
     const foreignEli = eli
-      .replace(`<eli:id_local>${ID}</eli:id_local>`, `<eli:id_local>${foreignId}</eli:id_local>`)
+      .replace(/<eli:id_local[^>]*>BOE-A-2015-10566<\/eli:id_local>/, `<eli:id_local>${foreignId}</eli:id_local>`)
       .split(ELI_WORK).join(foreignWork);
     const { provider } = providerWith({
       [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(foreignMetadata),
@@ -188,7 +363,7 @@ describe("BoeLawProvider", () => {
   });
 
   it("rejects a foreign ELI local identity with otherwise correct metadata", async () => {
-    const foreignEli = eli.replace(`<eli:id_local>${ID}</eli:id_local>`, "<eli:id_local>BOE-A-2015-10565</eli:id_local>");
+    const foreignEli = eli.replace(/<eli:id_local[^>]*>BOE-A-2015-10566<\/eli:id_local>/, "<eli:id_local>BOE-A-2015-10565</eli:id_local>");
     const { provider } = providerWith({
       [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
       [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(foreignEli, 200, true),
@@ -199,7 +374,7 @@ describe("BoeLawProvider", () => {
   });
 
   it("rejects duplicate required ELI identity elements", async () => {
-    const duplicate = eli.replace(`<eli:id_local>${ID}</eli:id_local>`, `<eli:id_local>${ID}</eli:id_local><eli:id_local>${ID}</eli:id_local>`);
+    const duplicate = eli.replace(/<eli:id_local[^>]*>BOE-A-2015-10566<\/eli:id_local>/, `<eli:id_local>${ID}</eli:id_local><eli:id_local>${ID}</eli:id_local>`);
     const { provider } = providerWith({
       [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
       [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(duplicate, 200, true),
@@ -261,6 +436,17 @@ describe("BoeLawProvider", () => {
       [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
       [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
       [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(wrongTitle, 200, true),
+    });
+    await assert.rejects(provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }), LawProviderUnavailableError);
+  });
+
+  it("rejects a selected article block with a non-precepto type", async () => {
+    const wrongType = block("a1", version("2024-08-02", "wrong block type")).replace('tipo="precepto"', 'tipo="encabezado"');
+    const { provider } = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(wrongType, 200, true),
     });
     await assert.rejects(provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }), LawProviderUnavailableError);
   });
@@ -430,11 +616,90 @@ describe("BoeLawProvider", () => {
     const { provider } = providerWith({
       [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
       [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(
-        eli.replace(`<eli:legal_expression_belongs_to_work rdf:resource="${ELI_WORK}"/>`, ""), 200, true,
+        eli.replace(`<eli:is_member_of rdf:resource="${ELI_WORK}"/>`, ""), 200, true,
       ),
       [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
       [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(block("a1", version("2024-08-02", "missing ELI identity text")), 200, true),
     });
+    await assert.rejects(
+      provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+  });
+
+  it("rejects malformed live ELI and block envelopes", async () => {
+    const malformedEli = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(
+        eli.replace("<metadata-eli>", "<metadata-eli-malformed>"), 200, true,
+      ),
+    });
+    await assert.rejects(
+      malformedEli.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+
+    const malformedBlock = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("2024-08-02", "malformed envelope")).replace("<data>", "<payload>"), 200, true,
+      ),
+    });
+    await assert.rejects(
+      malformedBlock.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+  });
+
+  it("rejects ambiguous consolidated expressions and foreign language expressions", async () => {
+    const duplicateExpression = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(
+        eli.replace(
+          "</eli:LegalExpression>",
+          `<eli:LegalExpression rdf:about="${ELI_WORK}/con/20240802/spa"><eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/><eli:realizes rdf:resource="${ELI_WORK}/con/20240802"/></eli:LegalExpression>`,
+        ), 200, true,
+      ),
+    });
+    await assert.rejects(
+      duplicateExpression.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+
+    const foreignLanguage = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(
+        eli.replace("authority/language/spa", "authority/language/cat"), 200, true,
+      ),
+    });
+    await assert.rejects(
+      foreignLanguage.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+  });
+
+  it("rejects a future-only block version instead of returning it", async () => {
+    const futureOnly = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("2999-01-01", "future-only text")), 200, true,
+      ),
+    });
+    await assert.rejects(
+      futureOnly.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+      LawProviderUnavailableError,
+    );
+  });
+
+  it("maps a thrown transport failure to provider unavailable", async () => {
+    const provider = new BoeLawProvider(
+      "https://api.example/legislacion-consolidada",
+      async () => { throw new Error("socket closed"); },
+    );
     await assert.rejects(
       provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
       LawProviderUnavailableError,
@@ -512,6 +777,117 @@ describe("BoeLawProvider", () => {
       ambiguous.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
       LawProviderUnavailableError,
     );
+  });
+
+  it("rejects malformed index envelopes instead of returning null or stale cache", async () => {
+    for (const malformedIndex of [
+      { data: [{}] },
+      { data: {} },
+      { data: [{ bloque: [{}] }] },
+      { data: [{ bloque: [{ id: "a1" }, { titulo: "Artículo 1" }] }] },
+    ]) {
+      const { provider, calls } = providerWith({
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(malformedIndex),
+      });
+      const cache = new InMemoryLawSectionCache();
+      await cache.set({
+        providerId: "boe",
+        providerLabel: "BOE",
+        lawCode: ID,
+        lawTitle: metadata.data[0].titulo,
+        section: "1",
+        jurisdiction: "ES",
+        text: "stale malformed-index fallback",
+        retrievedAt: "2026-09-09T00:00:00.000Z",
+        cacheStatus: "live",
+        isOfficialSource: true,
+        isAuthoritativeText: false,
+      });
+      const cachedProvider = new CachedLawProvider(provider, cache, {
+        allowedProviderIds: ["boe"],
+        now: () => new Date("2026-09-09T00:00:01.000Z"),
+      });
+
+      await assert.rejects(
+        cachedProvider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+        LawProviderUnavailableError,
+      );
+      assert.equal(calls.some((url) => url.includes("/texto/bloque/")), false);
+    }
+  });
+
+  it("rejects duplicate or whitespace-only block IDs before selection and cache fallback", async () => {
+    for (const [malformedIndex, blockId, classificationRequired] of [
+      [{ data: [{ bloque: [{ id: "a1", titulo: "Artículo 1" }, { id: "a1", titulo: "Artículo 2" }] }] }, "a1", false],
+      [{ data: [{ bloque: [{ id: "   ", titulo: "Artículo 1" }] }] }, "   ", false],
+      [{ data: [{ bloque: [{ id: "a1", titulo: "   " }] }] }, "a1", true],
+    ] as const) {
+      const { provider, calls } = providerWith({
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(malformedIndex),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/${encodeURIComponent(blockId)}`]: response(
+          block(blockId, version("2024-08-02", "integrity failure must not resolve")), 200, true,
+        ),
+      });
+      const cache = new InMemoryLawSectionCache();
+      await cache.set({
+        providerId: "boe",
+        providerLabel: "BOE",
+        lawCode: ID,
+        lawTitle: metadata.data[0].titulo,
+        section: "1",
+        jurisdiction: "ES",
+        text: "stale integrity fallback",
+        retrievedAt: "2026-09-09T00:00:00.000Z",
+        cacheStatus: "live",
+        isOfficialSource: true,
+        isAuthoritativeText: false,
+      });
+      const cachedProvider = new CachedLawProvider(provider, cache, {
+        allowedProviderIds: ["boe"],
+        now: () => new Date("2026-09-09T00:00:01.000Z"),
+      });
+
+      await assert.rejects(
+        cachedProvider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+        LawProviderUnavailableError,
+      );
+      assert.equal(calls.some((url) => url.includes("/texto/bloque/")), classificationRequired);
+    }
+  });
+
+  it("preserves valid distinct IDs and definitive empty or nonmatching index absence", async () => {
+    const distinct = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response({
+        data: [{ bloque: [{ id: "a1", titulo: "Artículo 1" }, { id: "a2", titulo: "Artículo 2" }] }],
+      }),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(
+        block("a1", version("2024-08-02", "distinct valid ID text")), 200, true,
+      ),
+    });
+    const distinctSection = await distinct.provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.equal(distinctSection?.text, "distinct valid ID text");
+
+    for (const indexValue of [
+      { data: [{ bloque: [{ id: "a2", titulo: "Artículo 2" }] }] },
+      { data: [{ bloque: [] }] },
+    ]) {
+      const { provider, calls } = providerWith({
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+        [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eli, 200, true),
+        [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(indexValue),
+      });
+      assert.equal(
+        await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" }),
+        null,
+      );
+      assert.equal(calls.some((url) => url.includes("/texto/bloque/")), false);
+    }
   });
 
   it("returns null for invalid identity, unknown act, and unknown article", async () => {
