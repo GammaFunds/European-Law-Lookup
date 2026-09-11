@@ -163,6 +163,10 @@ function normalizeToken(input: string): string {
     .toLowerCase();
 }
 
+export function isRecognizedEuHumanCitationOrganizationCode(orgCode: string): boolean {
+  return allOrgCodes.has(normalizeToken(orgCode));
+}
+
 export function normalizeEuCitationTitle(title: string): string {
   return title
     .normalize("NFKC")
@@ -200,7 +204,7 @@ function tryNormalizeSuffixOrg(input: string): string {
   const match = suffixPattern.exec(input);
   if (!match) return input;
   const orgCode = match[4];
-  if (!allOrgCodes.has(orgCode.toLowerCase())) return input;
+  if (!isRecognizedEuHumanCitationOrganizationCode(orgCode)) return input;
   return `${match[1]} (${orgCode}) ${match[2]}/${match[3]}`;
 }
 

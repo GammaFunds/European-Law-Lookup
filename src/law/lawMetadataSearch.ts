@@ -1,5 +1,8 @@
 import { parseEuCelex } from "./euActRegistry";
-import { euDocumentTypeForHumanCitationActLabel } from "./euHumanCitation";
+import {
+  euDocumentTypeForHumanCitationActLabel,
+  isRecognizedEuHumanCitationOrganizationCode,
+} from "./euHumanCitation";
 import type { EuDocumentType } from "./types";
 
 export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
@@ -159,13 +162,15 @@ function suggestionForAlias(
 
 function parseEuStructuredQuery(query: string): EuStructuredQuery | null {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ");
-  const generic = /^(\d{4})(?:\s*[/-]\s*|\s+)(\d{1,6})$/u.exec(normalized);
+  const generic = /^(\d{4})(?:\s*[/-]\s*|\s+)(\d{1,6})(?:\s*\/\s*([\p{L}\p{M}0-9]+))?$/u.exec(normalized);
   if (generic) {
+    if (generic[3] && !isRecognizedEuHumanCitationOrganizationCode(generic[3])) return null;
     return { documentType: null, year: generic[1], number: generic[2] };
   }
 
-  const typed = /^(.+?)\s+(\d{4})(?:(?:\s*[/-]\s*|\s+)(\d{1,6}))?$/u.exec(normalized);
+  const typed = /^(.+?)\s+(\d{4})(?:(?:\s*[/-]\s*|\s+)(\d{1,6})(?:\s*\/\s*([\p{L}\p{M}0-9]+))?)?$/u.exec(normalized);
   if (!typed) return null;
+  if (typed[4] && !isRecognizedEuHumanCitationOrganizationCode(typed[4])) return null;
   const documentType = euDocumentTypeForSearchLabel(typed[1]);
   if (!documentType) return null;
   return { documentType, year: typed[2], number: typed[3] ?? null };

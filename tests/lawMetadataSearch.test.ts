@@ -145,6 +145,31 @@ describe("law metadata autocomplete", () => {
     }
   });
 
+  it("matches full EU human-citation year-number forms with recognized organization suffixes", () => {
+    const titleLessEntries: SearchEntry[] = [{
+      jurisdiction: "EU",
+      canonicalInput: "32011L0061",
+      title: "32011L0061",
+      celex: "32011L0061",
+      documentType: "L",
+      year: "2011",
+      number: "0061",
+    }];
+
+    for (const query of ["Richtlinie 2011/61", "RL 2011/61", "2011/61", "Richtlinie 2011/61/EU", "Richtlinie 2011/61/UE"]) {
+      assert.deepEqual(
+        searchLawMetadata({ query, jurisdiction: "EU", entries: titleLessEntries }).map((entry) => entry.canonicalInput),
+        ["32011L0061"],
+        query,
+      );
+    }
+
+    assert.deepEqual(
+      searchLawMetadata({ query: "Richtlinie 2011/61/XYZ", jurisdiction: "EU", entries: titleLessEntries }),
+      [],
+    );
+  });
+
   it("matches localized document classes and German VO/RL abbreviations", () => {
     const titleLessEntries: SearchEntry[] = [
       {
