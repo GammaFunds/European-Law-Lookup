@@ -20,6 +20,10 @@ const recordPage = (permalinks: string[] = [`${ELI_WORK}/con`]) => `<html><body>
 // The fixture keeps the production response/data/metadata-eli/rdf:RDF wrapper
 // and includes the original and consolidated LegalResource members.
 const eli = `<response><status><code>200</code><text>ok</text></status><data><metadata-eli><rdf:RDF><eli:LegalResource rdf:about="${ELI_WORK}"><eli:has_member><eli:LegalResource rdf:about="${ELI_WORK}/con/20240802"><eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">${ID}</eli:id_local><eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/><eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2024-08-02</eli:version_date><eli:is_member_of rdf:resource="${ELI_WORK}"/><eli:is_realized_by><eli:LegalExpression rdf:about="${ELI_WORK}/con/20240802/spa"><eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/><eli:realizes rdf:resource="${ELI_WORK}/con/20240802"/></eli:LegalExpression></eli:is_realized_by></eli:LegalResource></eli:has_member></eli:LegalResource></rdf:RDF></metadata-eli></data></response>`;
+const eliWithNestedResources = eli.replace(
+  "</eli:LegalResource></rdf:RDF>",
+  `<eli:has_member><eli:LegalResource rdf:about="${ELI_WORK}/con/20250115"><eli:id_local>${ID}</eli:id_local><eli:version_date>2025-01-15</eli:version_date><eli:is_member_of rdf:resource="${ELI_WORK}"/><eli:is_realized_by><eli:LegalExpression rdf:about="${ELI_WORK}/con/20250115/spa"><eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/><eli:realizes rdf:resource="${ELI_WORK}/con/20250115"/></eli:LegalExpression></eli:is_realized_by></eli:LegalResource></eli:has_member></eli:LegalResource></rdf:RDF>`,
+);
 const index = {
   data: [{ bloque: [
     { id: "a1", titulo: "Artículo 1" },
@@ -123,6 +127,18 @@ describe("BoeLawProvider", () => {
       { path: `/legislacion-consolidada/id/${ID}/texto/indice`, accept: "application/json" },
       { path: `/legislacion-consolidada/id/${ID}/texto/bloque/a1`, accept: "application/xml" },
     ]);
+  });
+
+  it("traverses nested ELI resources in document order without skipping matches", async () => {
+    const { provider } = providerWith({
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadatos`]: response(metadata),
+      [`https://api.example/legislacion-consolidada/id/${ID}/metadata-eli`]: response(eliWithNestedResources, 200, true),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/indice`]: response(index),
+      [`https://api.example/legislacion-consolidada/id/${ID}/texto/bloque/a1`]: response(block("a1", version("2025-01-15", "nested resource")), 200, true),
+    });
+
+    const section = await provider.getSection({ lawCode: ID, section: "1", referenceType: "article", jurisdiction: "ES" });
+    assert.equal(section?.validFrom, "2025-01-15");
   });
 
   it("accepts the live compact BOE effective-date format", async () => {

@@ -123,7 +123,7 @@ export class LawLookupModal extends Modal {
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
   private inputLayout: InputLayout = "single";
-  private boeDiscoveryTimer: ReturnType<typeof setTimeout> | number | null = null;
+  private boeDiscoveryCancel: (() => void) | null = null;
   private boeDiscoveryRevision = 0;
   private boeDiscoveryPending: { query: string; revision: number } | null = null;
   private boeDiscoveryLoadingEl: HTMLElement | null = null;
@@ -340,12 +340,18 @@ export class LawLookupModal extends Modal {
 
       const revision = this.boeDiscoveryRevision;
       const schedule = () => {
-        this.boeDiscoveryTimer = null;
+        this.boeDiscoveryCancel = null;
         void this.loadBoeSuggestions(query, revision);
       };
-      this.boeDiscoveryTimer = typeof window === "undefined"
-        ? globalThis.setTimeout(schedule, 250)
-        : window.setTimeout(schedule, 250);
+      if (typeof window === "undefined") {
+        const nodeSetTimeout = setTimeout;
+        const nodeClearTimeout = clearTimeout;
+        const timer = nodeSetTimeout(schedule, 250);
+        this.boeDiscoveryCancel = () => nodeClearTimeout(timer);
+      } else {
+        const timer = window.setTimeout(schedule, 250);
+        this.boeDiscoveryCancel = () => window.clearTimeout(timer);
+      }
       return;
     }
     const suggestions = searchLawMetadata({
@@ -486,13 +492,9 @@ export class LawLookupModal extends Modal {
     this.boeDiscoveryLoadingEl?.remove();
     this.boeDiscoveryLoadingEl = null;
     this.suggestionsEl?.setAttribute?.("aria-busy", "false");
-    if (this.boeDiscoveryTimer !== null) {
-      if (typeof window === "undefined") {
-        globalThis.clearTimeout(this.boeDiscoveryTimer as ReturnType<typeof globalThis.setTimeout>);
-      } else {
-        window.clearTimeout(this.boeDiscoveryTimer as number);
-      }
-      this.boeDiscoveryTimer = null;
+    if (this.boeDiscoveryCancel !== null) {
+      this.boeDiscoveryCancel();
+      this.boeDiscoveryCancel = null;
     }
   }
 

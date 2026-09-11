@@ -391,10 +391,13 @@ function hasDescendantNamed(node: XmlNode, name: string): boolean {
 }
 
 function descendantsNamed(node: XmlNode, name: string): XmlNode[] {
-  return node.children.flatMap((child) => [
-    ...(child.name.toLowerCase() === name.toLowerCase() ? [child] : []),
-    ...descendantsNamed(child, name),
-  ]);
+  const descendants: XmlNode[] = [];
+  const normalizedName = name.toLowerCase();
+  for (const child of node.children) {
+    if (child.name.toLowerCase() === normalizedName) descendants.push(child);
+    descendants.push(...descendantsNamed(child, name));
+  }
+  return descendants;
 }
 
 function parseXmlDocument(xml: string, expectedRoot: string): XmlNode {

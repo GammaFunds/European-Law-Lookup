@@ -6,7 +6,7 @@ import type { App } from "obsidian";
 import type { EuActIndex, EuActIndexEntry } from "../src/law/euActIndex";
 import type { ProviderRegistry } from "../src/law/ProviderRegistry";
 import type { EuLawLanguage, LawReference, LawSection } from "../src/law/types";
-import type { LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
+import type { LawLookupModalDiscoveryProvider, LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
 import type { UiStrings } from "../src/ui/i18n";
 
 type Listener = (event?: unknown) => void;
@@ -179,6 +179,10 @@ class FakeSetting {
 }
 
 const obsidianStubPath = "/tmp/opencode/obsidian-virtual-stub.cjs";
+Object.defineProperty(globalThis, "window", {
+  configurable: true,
+  value: { setTimeout, clearTimeout },
+});
 const obsidianStub: Record<string, unknown> = {
   Modal: FakeModal,
   Notice: FakeNotice,
@@ -249,6 +253,7 @@ type LawLookupModalConstructor = new (
   },
   ui: UiStrings,
   indexProvider: LawLookupModalIndexProvider,
+  boeDiscovery?: LawLookupModalDiscoveryProvider | null,
 ) => LawLookupModalLike;
 
 const { LawLookupModal } = loadWithObsidianStub(
@@ -337,6 +342,7 @@ function buildModalHarness(
   getSection: (reference: LawReference) => Promise<LawSection | null> = async () => {
     throw new Error("probe-provider-unavailable");
   },
+  boeDiscovery: LawLookupModalDiscoveryProvider | null = null,
 ): ModalHarness {
   FakeSetting.instances = [];
   const requests: CapturedRequest[] = [];
@@ -360,6 +366,7 @@ function buildModalHarness(
     settingsStore,
     getUiStrings("en"),
     indexProvider,
+    boeDiscovery,
   );
   modal.onOpen();
   const contentEl = (modal as unknown as { contentEl: FakeElement }).contentEl;
@@ -369,6 +376,10 @@ function buildModalHarness(
   jurisdictionSelect.value = "EU";
   jurisdictionSelect.fire("change");
   return { requests, inputEl, jurisdictionSelect, modal, lastRequest: () => requests[requests.length - 1] };
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function runLookup(harness: ModalHarness, input: string): Promise<void> {
@@ -690,6 +701,73 @@ describe("LawLookupModal explicit lookup pending state", () => {
     harness.modal.onClose();
     assert.equal(explicitLookupSpinner(harness), undefined);
     resolvePending(successfulSection);
+  });
+});
+
+describe("LawLookupModal BOE discovery debounce", () => {
+  it("performs one discovery after the 250 ms debounce", async () => {
+    const queries: string[] = [];
+    const harness = buildModalHarness(null, undefined, {
+      search: async (query) => {
+        queries.push(query);
+        return { kind: "no-results", entries: [] };
+      },
+    });
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "ley";
+    harness.inputEl.fire("input");
+
+    await delay(300);
+    assert.deepEqual(queries, ["ley"]);
+    harness.modal.onClose();
+  });
+
+  it("cancels a pending discovery when the query is superseded", async () => {
+    const queries: string[] = [];
+    const harness = buildModalHarness(null, undefined, {
+      search: async (query) => {
+        queries.push(query);
+        return { kind: "no-results", entries: [] };
+      },
+    });
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "old";
+    harness.inputEl.fire("input");
+    await delay(50);
+    harness.inputEl.value = "new";
+    harness.inputEl.fire("input");
+
+    await delay(300);
+    assert.deepEqual(queries, ["new"]);
+    harness.modal.onClose();
+  });
+
+  it("cancels pending discovery on jurisdiction invalidation and modal close", async () => {
+    const queries: string[] = [];
+    const harness = buildModalHarness(null, undefined, {
+      search: async (query) => {
+        queries.push(query);
+        return { kind: "no-results", entries: [] };
+      },
+    });
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "cancel";
+    harness.inputEl.fire("input");
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    await delay(300);
+    assert.deepEqual(queries, []);
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "close";
+    harness.inputEl.fire("input");
+    harness.modal.onClose();
+    await delay(300);
+    assert.deepEqual(queries, []);
   });
 });
 
