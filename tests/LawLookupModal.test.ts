@@ -5,8 +5,10 @@ import { describe, it } from "node:test";
 import type { App } from "obsidian";
 import type { EuActIndex, EuActIndexEntry } from "../src/law/euActIndex";
 import type { ProviderRegistry } from "../src/law/ProviderRegistry";
-import type { EuLawLanguage, LawReference, LawSection } from "../src/law/types";
-import type { LawLookupModalDiscoveryProvider, LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
+import type { EuLawLanguage, LawJurisdiction, LawReference, LawSection } from "../src/law/types";
+import type { LawDiscoveryProvider } from "../src/law/LawDiscovery";
+import { LawDiscoveryMalformedResponseError } from "../src/law/LawDiscovery";
+import type { LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
 import type { UiStrings } from "../src/ui/i18n";
 
 type Listener = (event?: unknown) => void;
@@ -52,6 +54,7 @@ class FakeElement {
   removeClass(cls: string): void { this.classes.delete(cls); }
   hasClass(cls: string): boolean { return this.classes.has(cls); }
   classCount(): number { return this.classes.size; }
+  setText(value: string): void { this.text = value; }
 
   empty(): void {
     this.children = [];
@@ -253,7 +256,7 @@ type LawLookupModalConstructor = new (
   },
   ui: UiStrings,
   indexProvider: LawLookupModalIndexProvider,
-  boeDiscovery?: LawLookupModalDiscoveryProvider | null,
+  discoveryProvider?: ReadonlyMap<LawJurisdiction, LawDiscoveryProvider> | LawDiscoveryProvider | null,
 ) => LawLookupModalLike;
 
 const { LawLookupModal } = loadWithObsidianStub(
@@ -290,6 +293,10 @@ function makeEuActIndex(entries: Array<{ celex: string; availableLanguages: stri
 interface CapturedRequest {
   language?: string;
   euCelex?: string;
+  lawCode?: string;
+  section?: string;
+  jurisdiction?: string;
+  referenceType?: string;
 }
 
 interface ModalHarness {
@@ -342,13 +349,13 @@ function buildModalHarness(
   getSection: (reference: LawReference) => Promise<LawSection | null> = async () => {
     throw new Error("probe-provider-unavailable");
   },
-  boeDiscovery: LawLookupModalDiscoveryProvider | null = null,
+  discoveryProvider: ReadonlyMap<LawJurisdiction, LawDiscoveryProvider> | LawDiscoveryProvider | null = null,
 ): ModalHarness {
   FakeSetting.instances = [];
   const requests: CapturedRequest[] = [];
   const providerRegistry = {
     getSection: async (reference: LawReference): Promise<LawSection | null> => {
-      requests.push({ language: reference.language, euCelex: reference.euCelex });
+      requests.push({ language: reference.language, euCelex: reference.euCelex, lawCode: reference.lawCode, section: reference.section, jurisdiction: reference.jurisdiction, referenceType: reference.referenceType });
       return getSection(reference);
     },
   };
@@ -356,6 +363,8 @@ function buildModalHarness(
     getDefaultLawSourceVariant: () => "official-de",
     getDefaultEuLawLanguage: () => "fr" as EuLawLanguage,
     setDefaultEuLawLanguage: async (_value: EuLawLanguage): Promise<void> => {},
+    getDefaultFiLawLanguage: () => "fi" as const,
+    setDefaultFiLawLanguage: async (_value: "fi" | "sv"): Promise<void> => {},
     getShowInsertedSourceMetadata: () => true,
     setShowInsertedSourceMetadata: async (_value: boolean): Promise<void> => {},
   };
@@ -366,7 +375,7 @@ function buildModalHarness(
     settingsStore,
     getUiStrings("en"),
     indexProvider,
-    boeDiscovery,
+    discoveryProvider,
   );
   modal.onOpen();
   const contentEl = (modal as unknown as { contentEl: FakeElement }).contentEl;
@@ -397,6 +406,14 @@ function languageDropdown(): FakeDropdown {
 }
 
 describe("LawLookupModal EU requested language preservation", () => {
+  it("exposes Finland in the jurisdiction selector", () => {
+    const harness = buildModalHarness(null);
+    assert.ok(
+      harness.jurisdictionSelect.children.some((option) => option.value === "FI"),
+      "Finland must be selectable",
+    );
+  });
+
   it("does not look up when switching to Spain with a valid BOE citation", async () => {
     const harness = buildModalHarness(null);
     harness.inputEl.value = "BOE-A-2015-10566 Art. 1";
@@ -596,6 +613,133 @@ describe("LawLookupModal EU requested language preservation", () => {
   });
 });
 
+describe("LawLookupModal FI discovery and explicit lookup", () => {
+  it("debounces Finlex discovery, selects a law without lookup, and carries fi/sv explicitly", async () => {
+    let discoveryCalls = 0;
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "FI",
+      sourceLabel: "Finlex",
+      search: async () => {
+        discoveryCalls += 1;
+        return {
+          kind: "results",
+          entries: Array.from({ length: 9 }, (_, index) => ({
+            jurisdiction: "FI" as const,
+            canonicalInput: index === 0 ? "729/2018" : `${730 + index}/2018`,
+            title: index === 0 ? "Tieliikennelaki" : `Finnish law ${index}`,
+          })),
+        };
+      },
+    };
+    const harness = buildModalHarness(
+      null,
+      async (reference) => ({ ...successfulSection, jurisdiction: "FI", language: reference.language, lawCode: reference.lawCode, section: reference.section }),
+      new Map([["FI", discoveryProvider]]),
+    );
+
+    harness.jurisdictionSelect.value = "FI";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(discoveryCalls, 0);
+    harness.inputEl.value = "T";
+    harness.inputEl.fire("input");
+    await delay(100);
+    assert.equal(discoveryCalls, 0);
+    harness.inputEl.value = "Tieliikennelaki";
+    harness.inputEl.fire("input");
+    await delay(100);
+    assert.equal(discoveryCalls, 0);
+    await delay(180);
+    assert.equal(discoveryCalls, 1);
+
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: { canonicalInput: string } | null; selectedLawStatusEl: FakeElement };
+    assert.equal(state.suggestionsEl.children.length, 8);
+    state.suggestionsEl.children[0].fire("click");
+    assert.equal(state.selectedLaw?.canonicalInput, "729/2018");
+    assert.match(state.selectedLawStatusEl.text, /Tieliikennelaki/);
+    assert.equal(harness.requests.length, 0);
+
+    harness.inputEl.value = "729/2018 § 1";
+    harness.inputEl.fire("input");
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.lastRequest().language, "fin");
+    assert.equal(harness.lastRequest().lawCode, "729/2018");
+    assert.equal(harness.lastRequest().section, "1");
+    assert.equal(harness.lastRequest().jurisdiction, "FI");
+    assert.equal(harness.lastRequest().referenceType, "section");
+
+    await languageDropdown().select("sv");
+    assert.equal(harness.requests.length, 1);
+    assert.equal(state.selectedLaw?.canonicalInput, "729/2018");
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 2);
+    assert.equal(harness.lastRequest().language, "swe");
+    assert.equal(harness.lastRequest().lawCode, "729/2018");
+  });
+
+  it("ignores a stale FI query result", async () => {
+    const resolvers: Array<(result: Awaited<ReturnType<LawDiscoveryProvider["search"]>>) => void> = [];
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "FI", sourceLabel: "Finlex",
+      search: async () => new Promise((resolve) => { resolvers.push(resolve); }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["FI", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "FI"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "old query"; harness.inputEl.fire("input"); await delay(270);
+    harness.inputEl.value = "new query"; harness.inputEl.fire("input"); await delay(270);
+    assert.equal(resolvers.length, 2);
+    resolvers[0]({ kind: "results", entries: [{ jurisdiction: "FI", canonicalInput: "729/2018", title: "Old law" }] });
+    await settle();
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    assert.equal(state.suggestionsEl.children.some((child) => child.text.includes("Old law")), false);
+    resolvers[1]({ kind: "results", entries: [{ jurisdiction: "FI", canonicalInput: "731/1999", title: "New law" }] });
+    await settle();
+    assert.equal(state.suggestionsEl.children[0]?.text, "New law (731/1999)");
+  });
+
+  it("ignores a stale FI discovery result after switching jurisdiction", async () => {
+    let resolveDiscovery!: (result: Awaited<ReturnType<LawDiscoveryProvider["search"]>>) => void;
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "FI", sourceLabel: "Finlex",
+      search: async () => new Promise((resolve) => { resolveDiscovery = resolve; }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["FI", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "FI"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "finland"; harness.inputEl.fire("input"); await delay(270);
+    harness.jurisdictionSelect.value = "DE"; harness.jurisdictionSelect.fire("change");
+    resolveDiscovery({ kind: "results", entries: [{ jurisdiction: "FI", canonicalInput: "729/2018", title: "Stale Finland" }] });
+    await settle();
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    assert.equal(state.suggestionsEl.children.some((child) => child.text.includes("Stale Finland")), false);
+  });
+
+  it("renders FI no-results, malformed, and unavailable discovery states with Finlex labels", async () => {
+    const cases: Array<[string, unknown, string]> = [
+      ["no-results", { kind: "no-results", entries: [] }, "no-results"],
+      ["malformed", new LawDiscoveryMalformedResponseError("bad response"), "malformed"],
+      ["unavailable", new Error("offline"), "unavailable"],
+    ];
+    for (const [_name, outcome, status] of cases) {
+      const discoveryProvider: LawDiscoveryProvider = {
+        jurisdiction: "FI", sourceLabel: "Finlex",
+        search: async () => {
+          if (outcome instanceof Error) throw outcome;
+          return outcome as Awaited<ReturnType<LawDiscoveryProvider["search"]>>;
+        },
+      };
+      const harness = buildModalHarness(null, undefined, new Map([["FI", discoveryProvider]]));
+      harness.jurisdictionSelect.value = "FI"; harness.jurisdictionSelect.fire("change");
+      harness.inputEl.value = "finland"; harness.inputEl.fire("input"); await delay(270); await settle();
+      const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+      const statusEl = state.suggestionsEl.children[0];
+      assert.equal(statusEl?.getAttribute("data-discovery-status"), status);
+      assert.match(statusEl?.text ?? "", /Finlex/);
+      harness.modal.onClose();
+    }
+  });
+});
+
 describe("LawLookupModal explicit lookup pending state", () => {
   it("shows a result-region spinner immediately and keeps it while retrieval is pending", async () => {
     let resolvePending!: (section: LawSection) => void;
@@ -708,6 +852,8 @@ describe("LawLookupModal BOE discovery debounce", () => {
   it("performs one discovery after the 250 ms debounce", async () => {
     const queries: string[] = [];
     const harness = buildModalHarness(null, undefined, {
+      jurisdiction: "ES",
+      sourceLabel: "BOE",
       search: async (query) => {
         queries.push(query);
         return { kind: "no-results", entries: [] };
@@ -726,6 +872,8 @@ describe("LawLookupModal BOE discovery debounce", () => {
   it("cancels a pending discovery when the query is superseded", async () => {
     const queries: string[] = [];
     const harness = buildModalHarness(null, undefined, {
+      jurisdiction: "ES",
+      sourceLabel: "BOE",
       search: async (query) => {
         queries.push(query);
         return { kind: "no-results", entries: [] };
@@ -747,6 +895,8 @@ describe("LawLookupModal BOE discovery debounce", () => {
   it("cancels pending discovery on jurisdiction invalidation and modal close", async () => {
     const queries: string[] = [];
     const harness = buildModalHarness(null, undefined, {
+      jurisdiction: "ES",
+      sourceLabel: "BOE",
       search: async (query) => {
         queries.push(query);
         return { kind: "no-results", entries: [] };

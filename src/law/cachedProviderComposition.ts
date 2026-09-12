@@ -36,8 +36,8 @@ export function buildCachedLawProviders(
 
 export function allowedCachedProviderIds(enableMockLawProvider: boolean): string[] {
   return enableMockLawProvider
-    ? ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "mock"]
-    : ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe"];
+    ? ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex", "mock"]
+    : ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex"];
 }
 
 function createProviderChain(providers: LawProvider[]): LawProvider {

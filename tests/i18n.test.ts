@@ -32,6 +32,7 @@ const REQUIRED_UI_STRING_KEYS = [
   "euOfficialLanguageNotice", "celex", "sourceMetadata", "cacheMetadata", "swissOfficialTextLanguage", "unexpectedLookupFailure",
   "refreshEuActIndex",
   "spainAcceptedInputFormats", "spainInputExamples", "spainScopeNote",
+  "jurisdictionFinland", "defaultFiTextLanguage", "defaultFiTextLanguageDescription", "finlandAcceptedInputFormats", "finlandInputExamples", "finlandScopeNote", "finlandConsolidatedNotice",
 ] as const;
 
 // Every identical value is authorized by locale and exact key; no key has a global exemption.
@@ -60,6 +61,14 @@ const IDENTICAL_VALUE_ALLOWLIST: Record<string, Partial<Record<string, string>>>
   sl: { euDirectCelexExamples: "Parser-stable CELEX syntax intentionally uses Art.", euAliasExamples: "Curated parser aliases are language-neutral.", celex: "CELEX syntax is language-neutral." },
   sv: { euDirectCelexExamples: "Parser-stable CELEX syntax intentionally uses Art.", euAliasExamples: "Curated parser aliases are language-neutral.", celex: "CELEX syntax is language-neutral." },
 };
+
+for (const code of Object.keys(IDENTICAL_VALUE_ALLOWLIST)) {
+  IDENTICAL_VALUE_ALLOWLIST[code].finlandInputExamples = "The Finnish citation syntax is language-neutral.";
+}
+IDENTICAL_VALUE_ALLOWLIST.da.jurisdictionFinland = "Official country name is shared.";
+IDENTICAL_VALUE_ALLOWLIST.nl.jurisdictionFinland = "Official country name is shared.";
+IDENTICAL_VALUE_ALLOWLIST.de.finlandInputExamples = "The Finnish citation syntax is language-neutral.";
+IDENTICAL_VALUE_ALLOWLIST.sv.jurisdictionFinland = "Official country name is shared.";
 
 function isAllowedIdenticalKey(code: string, key: string): boolean {
   return Boolean(IDENTICAL_VALUE_ALLOWLIST[code]?.[key]);
@@ -156,6 +165,7 @@ describe("ui i18n", () => {
       "CELEX: {celex}.",
       "Art. 1 32016R0679; 32016R0679 Art. 1; CELEX: 32016R0679 Art. 1",
       "Art. 1 AI Act; AI Act Art. 1; Art. 1 Data Act",
+      "729/2018 § 1",
     ]);
     const unexpected = Object.entries(german)
       .filter(([key, value]) => value === english[key as keyof typeof english] && !technicalIdentities.has(value))

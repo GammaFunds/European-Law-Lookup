@@ -41,6 +41,11 @@ export function lawSectionCacheKey(reference: LawReference): string | null {
       : reference.jurisdiction === "ES"
         ? "ES:"
         : "";
+  if (reference.jurisdiction === "FI") {
+    const language = reference.language ?? "fin";
+    if (language !== "fin" && language !== "swe") return null;
+    return `FI:${legacyLawSectionCacheKey(reference)}:official-${language === "fin" ? "fi" : "sv"}`;
+  }
   if (reference.jurisdiction === "CH") {
     const language = reference.language ?? "de";
     if (language !== "de" && language !== "fr" && language !== "it") return null;
@@ -80,7 +85,7 @@ function cacheKeysForRead(reference: LawReference): string[] {
   if (reference.jurisdiction === "EU") {
     return [key];
   }
-  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH" || reference.jurisdiction === "ES") {
+  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH" || reference.jurisdiction === "ES" || reference.jurisdiction === "FI") {
     return [key];
   }
 
@@ -166,6 +171,7 @@ export class CachedLawProvider implements LawProvider {
     if (
       cachedSection &&
       this.isAllowedCachedProvider(cachedSection.providerId) &&
+      this.isValidCachedSection(reference, cachedSection) &&
       this.isFreshCachedSection(cachedSection)
     ) {
       return {
@@ -180,6 +186,17 @@ export class CachedLawProvider implements LawProvider {
 
   private isAllowedCachedProvider(providerId: string): boolean {
     return this.options.allowedProviderIds.includes(providerId);
+  }
+
+  private isValidCachedSection(reference: LawReference, section: LawSection): boolean {
+    if (reference.jurisdiction !== "FI") return true;
+    const requestedLanguage = reference.language ?? "fin";
+    return section.providerId === "finlex"
+      && section.jurisdiction === "FI"
+      && canonicalDisplayLawCode(section.lawCode).trim().toUpperCase() === canonicalDisplayLawCode(reference.lawCode).trim().toUpperCase()
+      && section.section.trim().toLowerCase() === reference.section.trim().toLowerCase()
+      && normalizeReferenceType(section.referenceType) === normalizeReferenceType(reference.referenceType)
+      && section.language === requestedLanguage;
   }
 
   private isFreshCachedSection(section: LawSection): boolean {

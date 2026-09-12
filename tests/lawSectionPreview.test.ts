@@ -5,6 +5,22 @@ import { getUiStrings } from "../src/ui/i18n";
 import type { LawSection } from "../src/law/types";
 
 describe("lawSectionPreview", () => {
+  it("shows the non-authoritative consolidated Finlex notice only for FI", () => {
+    const strings = getUiStrings("en");
+    const fi = buildLawSectionPreviewModel({
+      providerId: "finlex", providerLabel: "Finlex", lawCode: "729/2018", lawTitle: "Tieliikennelaki",
+      section: "1", referenceType: "section", jurisdiction: "FI", language: "fin", text: "Traffic law.",
+      retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: false,
+    }, { presentationStrings: strings });
+    assert.ok(fi.metadataLines.includes(strings.finlandConsolidatedNotice!));
+
+    const de = buildLawSectionPreviewModel({
+      providerId: "gesetze-im-internet", providerLabel: "Gesetze im Internet", lawCode: "BGB", lawTitle: "Bürgerliches Gesetzbuch",
+      section: "1", jurisdiction: "DE", text: "Text.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live",
+      isOfficialSource: true, isAuthoritativeText: false,
+    }, { presentationStrings: strings });
+    assert.equal(de.metadataLines.includes(strings.finlandConsolidatedNotice!), false);
+  });
   it("shows official EU language metadata without a national translation warning", () => {
     const preview = buildLawSectionPreviewModel({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true });
     assert.deepEqual(preview.metadataLines, ["Amtliche EU-Sprachfassung: English.", "Quelle: EUR-Lex, DSGVO, Art. 6, abgerufen am 2026-07-10.", "Cache: live."]);

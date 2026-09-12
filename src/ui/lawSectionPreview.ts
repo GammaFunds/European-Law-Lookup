@@ -5,7 +5,7 @@ import { localizedCacheStatus, type UiPresentationStrings } from "./i18n";
 
 interface LawSectionPreviewOptions {
   includeMetadataFooter?: boolean;
-  presentationStrings?: Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata">;
+  presentationStrings?: Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata"> & { finlandConsolidatedNotice?: string };
 }
 
 export interface LawSectionPreviewModel {
@@ -34,7 +34,7 @@ function buildMetadataLines(
   section: LawSection,
   referenceLabel: string,
   includeMetadataFooter: boolean,
-  strings?: Partial<Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata">>,
+  strings?: Partial<Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata">> & { finlandConsolidatedNotice?: string },
 ): string[] {
   const presentation = {
     live: "live",
@@ -46,6 +46,7 @@ function buildMetadataLines(
     celex: "CELEX: {celex}.",
     sourceMetadata: "Quelle: {provider}, {lawCode}, {reference}, abgerufen am {date}.",
     cacheMetadata: "Cache: {status}.",
+    finlandConsolidatedNotice: "Finlex consolidated text from an official source; the retrieved consolidated expression is marked non-authoritative.",
     ...strings,
   };
   const lines: string[] = [];
@@ -55,6 +56,9 @@ function buildMetadataLines(
 
   if (section.jurisdiction === "AT") {
     lines.push(presentation.austrianConsolidatedNotice);
+  }
+  if (section.jurisdiction === "FI" && !section.isAuthoritativeText) {
+    lines.push(presentation.finlandConsolidatedNotice);
   }
   if (section.jurisdiction === "EU" && section.language) {
     const nativeName = cellarLanguageNativeName(section.language);

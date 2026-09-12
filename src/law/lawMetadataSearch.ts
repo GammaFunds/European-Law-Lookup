@@ -5,7 +5,7 @@ import {
 } from "./euHumanCitation";
 import type { EuDocumentType } from "./types";
 
-export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
+export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI";
 
 export type LawMetadataMatchKind =
   | "exact-alias"

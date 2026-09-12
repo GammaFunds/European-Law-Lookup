@@ -29,6 +29,8 @@ import {
 } from "./law/providers/fedlexMapping";
 import { getSupportedBoeLaws } from "./law/providers/boeMapping";
 import { BoeLawDiscovery } from "./law/providers/BoeLawDiscovery";
+import { FinlexLawDiscovery } from "./law/providers/FinlexLawDiscovery";
+import type { LawDiscoveryProvider } from "./law/LawDiscovery";
 import {
   normalizeFedlexLanguage,
   type OfficialTitlesByLanguage,
@@ -89,6 +91,7 @@ interface DeLawPluginSettings {
   defaultJurisdiction: LawJurisdiction;
   defaultEuLawLanguage: EuLawLanguage;
   defaultChLawLanguage: FedlexLanguage;
+  defaultFiLawLanguage: "fi" | "sv";
   showInsertedSourceMetadata: boolean;
   inputLayout: InputLayout;
 }
@@ -108,6 +111,7 @@ const DEFAULT_SETTINGS: DeLawPluginSettings = {
   defaultJurisdiction: "EU",
   defaultEuLawLanguage: "de",
   defaultChLawLanguage: "de",
+  defaultFiLawLanguage: "fi",
   showInsertedSourceMetadata: true,
   inputLayout: "single",
 };
@@ -152,6 +156,8 @@ export default class DeLawPlugin extends Plugin {
             setDefaultEuLawLanguage: async (value) => { await this.updateSettings({ defaultEuLawLanguage: value }); },
             getDefaultChLawLanguage: () => this.pluginSettings.defaultChLawLanguage,
             setDefaultChLawLanguage: async (value) => { await this.updateSettings({ defaultChLawLanguage: value }); },
+            getDefaultFiLawLanguage: () => this.pluginSettings.defaultFiLawLanguage,
+            setDefaultFiLawLanguage: async (value) => { await this.updateSettings({ defaultFiLawLanguage: value }); },
             getShowInsertedSourceMetadata: () =>
               this.pluginSettings.showInsertedSourceMetadata,
             setShowInsertedSourceMetadata: async (value) => {
@@ -164,7 +170,10 @@ export default class DeLawPlugin extends Plugin {
           },
           this.uiStrings,
           this.createIndexProvider(),
-          new BoeLawDiscovery(createObsidianRequestUrlTransport(requestUrl)),
+          new Map<LawJurisdiction, LawDiscoveryProvider>([
+            ["ES", new BoeLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
+            ["FI", new FinlexLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
+          ]),
         );
         this.activeLawLookupModal = modal;
         modal.open();
@@ -383,6 +392,7 @@ export default class DeLawPlugin extends Plugin {
       defaultJurisdiction: normalizeJurisdiction(storedSettings?.defaultJurisdiction),
       defaultEuLawLanguage: defaultEuLawLanguage(safeGetObsidianLanguage(), storedSettings?.defaultEuLawLanguage),
       defaultChLawLanguage: normalizeFedlexLanguage(storedSettings?.defaultChLawLanguage) ?? "de",
+      defaultFiLawLanguage: storedSettings?.defaultFiLawLanguage === "sv" ? "sv" : "fi",
       showInsertedSourceMetadata:
         storedSettings?.showInsertedSourceMetadata !== false,
       inputLayout: normalizeInputLayout(storedSettings?.inputLayout),
@@ -475,6 +485,7 @@ class DeLawSettingsTab extends PluginSettingTab {
             AT: ui.jurisdictionAustria,
             CH: ui.jurisdictionSwitzerland,
             ES: ui.jurisdictionSpain,
+            FI: ui.jurisdictionFinland ?? "Finland",
           },
         },
       },
@@ -485,6 +496,15 @@ class DeLawSettingsTab extends PluginSettingTab {
           type: "dropdown",
           key: "defaultEuLawLanguage",
           options: euLanguageOptions,
+        },
+      },
+      {
+        name: ui.defaultFiTextLanguage ?? "Finnish text language",
+        desc: ui.defaultFiTextLanguageDescription,
+        control: {
+          type: "dropdown",
+          key: "defaultFiLawLanguage",
+          options: { fi: "Suomi", sv: "Svenska" },
         },
       },
       {
@@ -525,6 +545,7 @@ class DeLawSettingsTab extends PluginSettingTab {
       case "inputLayout": return settings.inputLayout;
       case "defaultJurisdiction": return settings.defaultJurisdiction;
       case "defaultEuLawLanguage": return settings.defaultEuLawLanguage;
+      case "defaultFiLawLanguage": return settings.defaultFiLawLanguage;
       case "defaultLawSourceVariant": return settings.defaultLawSourceVariant;
       case "lawSectionCacheTtlDays": return settings.lawSectionCacheTtlDays == null ? "" : String(settings.lawSectionCacheTtlDays);
       default: return undefined;
@@ -545,6 +566,9 @@ class DeLawSettingsTab extends PluginSettingTab {
         return;
       case "defaultEuLawLanguage":
         await this.plugin.updateSettings({ defaultEuLawLanguage: defaultEuLawLanguage(undefined, value) });
+        return;
+      case "defaultFiLawLanguage":
+        await this.plugin.updateSettings({ defaultFiLawLanguage: value === "sv" ? "sv" : "fi" });
         return;
       case "defaultLawSourceVariant":
         await this.plugin.updateSettings({
@@ -576,6 +600,7 @@ class DeLawSettingsTab extends PluginSettingTab {
       { label: ui.jurisdictionAustria, tabId: "de-law-jurisdiction-tab-austria", panelId: "de-law-jurisdiction-panel-austria" },
       { label: ui.jurisdictionSwitzerland, tabId: "de-law-jurisdiction-tab-switzerland", panelId: "de-law-jurisdiction-panel-switzerland" },
       { label: ui.jurisdictionSpain, tabId: "de-law-jurisdiction-tab-spain", panelId: "de-law-jurisdiction-panel-spain" },
+      { label: ui.jurisdictionFinland ?? "Finland", tabId: "de-law-jurisdiction-tab-finland", panelId: "de-law-jurisdiction-panel-finland" },
     ];
 
     const tabs: HTMLButtonElement[] = [];
@@ -630,6 +655,8 @@ class DeLawSettingsTab extends PluginSettingTab {
     this.renderSupportedLawsGroup(panels[4], ui.articleReferences, getSupportedBoeLaws(), ui);
     panels[4].createEl("p", { cls: "de-law-settings-supported-description", text: ui.spainScopeNote });
     this.renderSpainInputFormats(panels[4], ui);
+    panels[5].createEl("p", { cls: "de-law-settings-supported-description", text: ui.finlandScopeNote });
+    this.renderFinlandInputFormats(panels[5], ui);
 
     const allTabs = tabs;
     const allPanels = panels;
@@ -704,6 +731,14 @@ class DeLawSettingsTab extends PluginSettingTab {
     }
   }
 
+  private renderFinlandInputFormats(containerEl: HTMLElement, ui: UiStrings): void {
+    new Setting(containerEl).setName(ui.finlandAcceptedInputFormats ?? "Finland input formats").setHeading();
+    const examples = containerEl.createDiv({ cls: "de-law-settings-supported-example-list" });
+    for (const example of (ui.finlandInputExamples ?? "729/2018 § 1").split(";").map((value) => value.trim()).filter(Boolean)) {
+      examples.createEl("code", { cls: "de-law-settings-supported-example", text: example });
+    }
+  }
+
   private renderSupportedLawsGroup(
     containerEl: HTMLElement,
     heading: string,
@@ -771,5 +806,5 @@ function normalizeTtlDays(value: unknown): number | null {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" ? value : "EU";
 }

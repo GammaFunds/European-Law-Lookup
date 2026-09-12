@@ -1,5 +1,11 @@
 import type { LawMetadataSearchEntry } from "../lawMetadataSearch";
 import type { LawProviderHttpTransport } from "../httpTransport";
+import {
+  LawDiscoveryMalformedResponseError,
+  LawDiscoveryUnavailableError,
+  type LawDiscoveryProvider,
+  type LawDiscoveryResult,
+} from "../LawDiscovery";
 
 const DEFAULT_SEARCH_URL = "https://www.boe.es/datosabiertos/api/legislacion-consolidada";
 const BOE_ID = /^BOE-A-(\d{4})-(\d{1,5})$/i;
@@ -8,12 +14,9 @@ const BARE_NUMERIC_TOKEN = /^\d+$/;
 const MAX_RESULTS = 8;
 const MIN_QUERY_LENGTH = 2;
 
-export interface BoeLawDiscoveryResult {
-  kind: "results" | "no-results";
-  entries: LawMetadataSearchEntry[];
-}
+export type BoeLawDiscoveryResult = LawDiscoveryResult;
 
-export class BoeLawDiscoveryUnavailableError extends Error {
+export class BoeLawDiscoveryUnavailableError extends LawDiscoveryUnavailableError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message);
     if (options?.cause !== undefined) (this as Error & { cause?: unknown }).cause = options.cause;
@@ -21,7 +24,7 @@ export class BoeLawDiscoveryUnavailableError extends Error {
   }
 }
 
-export class BoeLawDiscoveryMalformedResponseError extends Error {
+export class BoeLawDiscoveryMalformedResponseError extends LawDiscoveryMalformedResponseError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message);
     if (options?.cause !== undefined) (this as Error & { cause?: unknown }).cause = options.cause;
@@ -29,7 +32,10 @@ export class BoeLawDiscoveryMalformedResponseError extends Error {
   }
 }
 
-export class BoeLawDiscovery {
+export class BoeLawDiscovery implements LawDiscoveryProvider {
+  readonly jurisdiction = "ES" as const;
+  readonly sourceLabel = "BOE";
+
   constructor(
     private readonly fetchFn: LawProviderHttpTransport,
     private readonly searchUrl = DEFAULT_SEARCH_URL,

@@ -3,6 +3,19 @@ import { describe, it } from "node:test";
 import { parseLawReference, parseLawReferenceWithSelectedJurisdiction } from "../src/parser";
 
 describe("parseLawReference", () => {
+  it("parses Finnish statute-number section references only in FI", () => {
+    for (const input of ["729/2018 § 1", "§ 1 729/2018"]) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "FI" as never), {
+        lawCode: "729/2018",
+        section: "1",
+        referenceType: "section",
+        jurisdiction: "FI",
+      }, input);
+    }
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("729/2018 § 1", "DE"), null);
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("729/2018 § 1", "ES"), null);
+  });
+
   it("parses Spain BOE article references in both orders and supported forms", () => {
     for (const input of [
       "BOE-A-2015-10566 Art. 1",

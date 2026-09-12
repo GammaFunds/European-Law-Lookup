@@ -11,6 +11,7 @@ import { NeurisLawProvider } from "./providers/NeurisLawProvider";
 import { RisLawProvider } from "./providers/RisLawProvider";
 import { EurLexLawProvider } from "./providers/EurLexLawProvider";
 import { BoeLawProvider } from "./providers/BoeLawProvider";
+import { FinlexLawProvider } from "./providers/FinlexLawProvider";
 import type { EuActLanguageAuthorizer } from "./providers/eurLexMapping";
 import type { LawReference } from "./types";
 
@@ -20,6 +21,7 @@ const PROVIDER_IDS_BY_JURISDICTION = {
   AT: ["ris"],
   CH: ["fedlex"],
   ES: ["boe"],
+  FI: ["finlex"],
 } as const;
 
 export function providersForReference(providers: readonly LawProvider[], reference: LawReference): LawProvider[] {
@@ -51,6 +53,7 @@ export function buildLawProviders(options: ProviderCompositionOptions = {}): Law
     new GesetzeImInternetProvider(undefined, httpTransport),
     new RisLawProvider(undefined, httpTransport),
     new BoeLawProvider(undefined, httpTransport),
+    new FinlexLawProvider(undefined, httpTransport),
   ];
 
   if (options.enableMockLawProvider === true) {

@@ -35,10 +35,10 @@ import {
   type LawMetadataSuggestion,
 } from "../law/lawMetadataSearch";
 import {
-  BoeLawDiscoveryMalformedResponseError,
-  BoeLawDiscoveryUnavailableError,
-  type BoeLawDiscoveryResult,
-} from "../law/providers/BoeLawDiscovery";
+  classifyLawDiscoveryError,
+  type LawDiscoveryProvider,
+  type LawDiscoveryStatus,
+} from "../law/LawDiscovery";
 
 interface LawLookupModalSettingsStore {
   getDefaultLawSourceVariant(): LawSourceVariant;
@@ -48,6 +48,8 @@ interface LawLookupModalSettingsStore {
   setDefaultEuLawLanguage(value: EuLawLanguage): Promise<void>;
   getDefaultChLawLanguage?(): FedlexLanguage;
   setDefaultChLawLanguage?(value: FedlexLanguage): Promise<void>;
+  getDefaultFiLawLanguage?(): "fi" | "sv";
+  setDefaultFiLawLanguage?(value: "fi" | "sv"): Promise<void>;
   getShowInsertedSourceMetadata(): boolean;
   setShowInsertedSourceMetadata(value: boolean): Promise<void>;
   getInputLayout?(): InputLayout;
@@ -57,7 +59,7 @@ interface LawLookupModalSettingsStore {
 export type InputLayout = "single" | "split";
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" ? value : "EU";
 }
 
 export function normalizeInputLayout(value: unknown): InputLayout {
@@ -92,10 +94,6 @@ export interface LawLookupModalIndexProvider {
   getEuActIndex(): EuActIndex | null;
 }
 
-export interface LawLookupModalDiscoveryProvider {
-  search(query: string): Promise<BoeLawDiscoveryResult>;
-}
-
 const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
 const COMPLETE_SPANISH_BOE_IDENTIFIER = /^BOE-A-\d{4}-\d{1,5}$/iu;
 let nextInputId = 0;
@@ -119,14 +117,15 @@ export class LawLookupModal extends Modal {
   private selectedEuLanguage: EuLawLanguage = "de";
   private selectedEuCellarLanguage: string = "deu";
   private selectedChLanguage: FedlexLanguage = "de";
+  private selectedFiLanguage: "fi" | "sv" = "fi";
   private selectedLaw: LawMetadataSuggestion | null = null;
   private showInsertedSourceMetadata = true;
   private readonly lookupSequence = new LookupSequence();
   private inputLayout: InputLayout = "single";
-  private boeDiscoveryCancel: (() => void) | null = null;
-  private boeDiscoveryRevision = 0;
-  private boeDiscoveryPending: { query: string; revision: number } | null = null;
-  private boeDiscoveryLoadingEl: HTMLElement | null = null;
+  private discoveryCancel: (() => void) | null = null;
+  private discoveryRevision = 0;
+  private discoveryPending: { query: string; revision: number } | null = null;
+  private discoveryLoadingEl: HTMLElement | null = null;
   private explicitLookupPendingId: number | null = null;
   private explicitLookupLoadingEl: HTMLElement | null = null;
   private modalContainerEl: HTMLElement | null = null;
@@ -137,7 +136,7 @@ export class LawLookupModal extends Modal {
     private readonly settingsStore: LawLookupModalSettingsStore,
     private readonly ui: UiStrings,
     private readonly indexProvider: LawLookupModalIndexProvider = { getEuActIndex: () => null },
-    private readonly boeDiscovery: LawLookupModalDiscoveryProvider | null = null,
+    private readonly discoveryProviders: ReadonlyMap<LawJurisdiction, LawDiscoveryProvider> | LawDiscoveryProvider | null = null,
   ) {
     super(app);
   }
@@ -176,11 +175,12 @@ export class LawLookupModal extends Modal {
     });
     jurisdictionSelect.createEl("option", { value: "CH", text: this.ui.jurisdictionSwitzerland });
     jurisdictionSelect.createEl("option", { value: "ES", text: this.ui.jurisdictionSpain });
+    jurisdictionSelect.createEl("option", { value: "FI", text: this.ui.jurisdictionFinland ?? "Finland" });
     jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
       this.lookupSequence.next();
       this.clearExplicitLookupLoading();
-      this.cancelBoeDiscovery();
+      this.cancelDiscovery();
       this.selectedJurisdiction = jurisdictionSelect.value as LawJurisdiction;
       this.selectedLaw = null;
       this.currentSection = null;
@@ -210,6 +210,7 @@ export class LawLookupModal extends Modal {
     this.selectedEuLanguage = this.settingsStore.getDefaultEuLawLanguage();
     this.selectedEuCellarLanguage = legacyEuLawLanguageToCellarCode(this.selectedEuLanguage);
     this.selectedChLanguage = this.settingsStore.getDefaultChLawLanguage?.() ?? "de";
+    this.selectedFiLanguage = this.settingsStore.getDefaultFiLawLanguage?.() ?? "fi";
     this.showInsertedSourceMetadata =
       this.settingsStore.getShowInsertedSourceMetadata();
     this.renderActions();
@@ -218,7 +219,7 @@ export class LawLookupModal extends Modal {
   onClose() {
     this.clearModalContainerClass();
     this.clearExplicitLookupLoading();
-    this.cancelBoeDiscovery();
+    this.cancelDiscovery();
     this.contentEl.empty();
     this.settingsStore.onClose?.();
   }
@@ -256,7 +257,7 @@ export class LawLookupModal extends Modal {
   }
 
   private async renderParsedReference() {
-    this.cancelBoeDiscovery();
+    this.cancelDiscovery();
     this.suggestionsEl?.empty();
     const lookupId = this.lookupSequence.next();
     this.clearExplicitLookupLoading();
@@ -278,6 +279,8 @@ export class LawLookupModal extends Modal {
       ? { ...parsedReference, language: this.selectedEuCellarLanguage }
       : parsedReference.jurisdiction === "CH"
         ? { ...parsedReference, language: this.selectedChLanguage }
+        : parsedReference.jurisdiction === "FI"
+          ? { ...parsedReference, language: this.selectedFiLanguage === "fi" ? "fin" : "swe" }
         : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
@@ -330,30 +333,32 @@ export class LawLookupModal extends Modal {
   }
 
   private renderMetadataSuggestions(): void {
-    this.cancelBoeDiscovery();
+    this.cancelDiscovery();
     this.suggestionsEl.empty();
-    if (this.selectedJurisdiction === "ES") {
-      if (this.canonicalizeDirectSpanishBoeInput()) return;
-      const query = this.boeDiscoveryQuery();
-      if (!this.boeDiscovery || query.trim().length < 2) return;
+    if (this.selectedJurisdiction === "ES" && this.canonicalizeDirectSpanishBoeInput()) return;
+    const discoveryProvider = this.discoveryProviderForJurisdiction();
+    if (discoveryProvider) {
+      const query = this.discoveryQuery();
+      if (query.trim().length < 2) return;
       if (this.selectedLaw && this.inputStillHasSelectedLawPrefix()) return;
 
-      const revision = this.boeDiscoveryRevision;
+      const revision = this.discoveryRevision;
       const schedule = () => {
-        this.boeDiscoveryCancel = null;
-        void this.loadBoeSuggestions(query, revision);
+        this.discoveryCancel = null;
+        void this.loadDiscoverySuggestions(discoveryProvider, query, revision);
       };
       if (typeof window === "undefined") {
         const nodeSetTimeout = setTimeout;
         const nodeClearTimeout = clearTimeout;
         const timer = nodeSetTimeout(schedule, 250);
-        this.boeDiscoveryCancel = () => nodeClearTimeout(timer);
+        this.discoveryCancel = () => nodeClearTimeout(timer);
       } else {
         const timer = window.setTimeout(schedule, 250);
-        this.boeDiscoveryCancel = () => window.clearTimeout(timer);
+        this.discoveryCancel = () => window.clearTimeout(timer);
       }
       return;
     }
+    if (this.selectedJurisdiction === "ES") return;
     const suggestions = searchLawMetadata({
       query: this.lawInputValue(),
       jurisdiction: this.selectedJurisdiction,
@@ -382,59 +387,56 @@ export class LawLookupModal extends Modal {
     return true;
   }
 
-  private async loadBoeSuggestions(query: string, revision: number): Promise<void> {
-    if (!this.boeDiscovery) return;
-    if (!this.isCurrentBoeDiscovery(query, revision)) return;
+  private async loadDiscoverySuggestions(
+    provider: LawDiscoveryProvider,
+    query: string,
+    revision: number,
+  ): Promise<void> {
+    if (!this.isCurrentDiscovery(query, revision)) return;
 
-    this.renderBoeDiscoveryLoading(query, revision);
+    this.renderDiscoveryLoading(query, revision);
 
     try {
-      const result = await this.boeDiscovery.search(query);
-      if (!this.isCurrentBoeDiscovery(query, revision)) return;
+      const result = await provider.search(query);
+      if (!this.isCurrentDiscovery(query, revision)) return;
       if (result.kind === "no-results") {
-        this.renderBoeDiscoveryStatus("no-results");
+        this.renderDiscoveryStatus(provider, "no-results");
         return;
       }
 
-      const suggestions: LawMetadataSuggestion[] = result.entries.map((entry) => ({
+      const suggestions: LawMetadataSuggestion[] = result.entries.slice(0, 8).map((entry) => ({
         ...entry,
         matchKind: "title-contains",
       }));
       if (suggestions.length === 0) {
-        this.renderBoeDiscoveryStatus("no-results");
+        this.renderDiscoveryStatus(provider, "no-results");
         return;
       }
       this.suggestionsEl.empty();
       this.renderSuggestionButtons(suggestions);
     } catch (error) {
-      if (!this.isCurrentBoeDiscovery(query, revision)) return;
-      this.renderBoeDiscoveryStatus(
-        error instanceof BoeLawDiscoveryUnavailableError
-          ? "unavailable"
-          : error instanceof BoeLawDiscoveryMalformedResponseError
-            ? "malformed"
-          : "unavailable",
-      );
+      if (!this.isCurrentDiscovery(query, revision)) return;
+      this.renderDiscoveryStatus(provider, classifyLawDiscoveryError(error));
     } finally {
-      this.clearBoeDiscoveryLoading(query, revision);
+      this.clearDiscoveryLoading(query, revision);
     }
   }
 
-  private renderBoeDiscoveryLoading(query: string, revision: number): void {
-    this.boeDiscoveryPending = { query, revision };
+  private renderDiscoveryLoading(query: string, revision: number): void {
+    this.discoveryPending = { query, revision };
     this.suggestionsEl.empty();
     this.suggestionsEl.setAttribute("aria-busy", "true");
-    this.boeDiscoveryLoadingEl = this.suggestionsEl.createDiv({ cls: "de-law-lookup-loading" });
-    this.boeDiscoveryLoadingEl.setAttribute("role", "status");
-    this.boeDiscoveryLoadingEl.setAttribute("aria-label", "Loading law suggestions");
+    this.discoveryLoadingEl = this.suggestionsEl.createDiv({ cls: "de-law-lookup-loading" });
+    this.discoveryLoadingEl.setAttribute("role", "status");
+    this.discoveryLoadingEl.setAttribute("aria-label", "Loading law suggestions");
   }
 
-  private clearBoeDiscoveryLoading(query: string, revision: number): void {
-    if (this.boeDiscoveryPending?.query !== query || this.boeDiscoveryPending.revision !== revision) return;
-    this.boeDiscoveryPending = null;
+  private clearDiscoveryLoading(query: string, revision: number): void {
+    if (this.discoveryPending?.query !== query || this.discoveryPending.revision !== revision) return;
+    this.discoveryPending = null;
     this.suggestionsEl.setAttribute("aria-busy", "false");
-    this.boeDiscoveryLoadingEl?.remove();
-    this.boeDiscoveryLoadingEl = null;
+    this.discoveryLoadingEl?.remove();
+    this.discoveryLoadingEl = null;
   }
 
   private renderSuggestionButtons(suggestions: LawMetadataSuggestion[]): void {
@@ -458,13 +460,14 @@ export class LawLookupModal extends Modal {
     }
   }
 
-  private renderBoeDiscoveryStatus(status: "no-results" | "unavailable" | "malformed"): void {
+  private renderDiscoveryStatus(provider: LawDiscoveryProvider, status: LawDiscoveryStatus): void {
     this.suggestionsEl.empty();
+    const sourceLabel = provider.sourceLabel;
     const message = status === "no-results"
-      ? "BOE: no matching laws."
+      ? `${sourceLabel}: no matching laws.`
       : status === "unavailable"
-        ? "BOE: discovery source unavailable."
-        : "BOE: discovery response invalid.";
+        ? `${sourceLabel}: discovery source unavailable.`
+        : `${sourceLabel}: discovery response invalid.`;
     const statusEl = this.suggestionsEl.createDiv({
       cls: "de-law-lookup-discovery-status",
       text: message,
@@ -472,7 +475,7 @@ export class LawLookupModal extends Modal {
     statusEl.setAttribute("data-discovery-status", status);
   }
 
-  private boeDiscoveryQuery(): string {
+  private discoveryQuery(): string {
     if (this.selectedJurisdiction !== "ES") return this.lawInputValue();
     if (this.inputLayout === "single") {
       return decomposeOneLineLookupInput(this.lawInputValue(), "ES")?.law ?? this.lawInputValue();
@@ -480,22 +483,32 @@ export class LawLookupModal extends Modal {
     return this.lawInputValue();
   }
 
-  private isCurrentBoeDiscovery(query: string, revision: number): boolean {
-    return this.selectedJurisdiction === "ES"
-      && this.boeDiscoveryRevision === revision
-      && this.boeDiscoveryQuery() === query;
+  private isCurrentDiscovery(query: string, revision: number): boolean {
+    return this.discoveryProviderForJurisdiction() !== null
+      && this.discoveryRevision === revision
+      && this.discoveryQuery() === query;
   }
 
-  private cancelBoeDiscovery(): void {
-    this.boeDiscoveryRevision += 1;
-    this.boeDiscoveryPending = null;
-    this.boeDiscoveryLoadingEl?.remove();
-    this.boeDiscoveryLoadingEl = null;
+  private cancelDiscovery(): void {
+    this.discoveryRevision += 1;
+    this.discoveryPending = null;
+    this.discoveryLoadingEl?.remove();
+    this.discoveryLoadingEl = null;
     this.suggestionsEl?.setAttribute?.("aria-busy", "false");
-    if (this.boeDiscoveryCancel !== null) {
-      this.boeDiscoveryCancel();
-      this.boeDiscoveryCancel = null;
+    if (this.discoveryCancel !== null) {
+      this.discoveryCancel();
+      this.discoveryCancel = null;
     }
+  }
+
+  private discoveryProviderForJurisdiction(): LawDiscoveryProvider | null {
+    if (this.discoveryProviders && "get" in this.discoveryProviders) {
+      return this.discoveryProviders.get(this.selectedJurisdiction) ?? null;
+    }
+    if (this.discoveryProviders && "search" in this.discoveryProviders && this.discoveryProviders.jurisdiction === this.selectedJurisdiction) {
+      return this.discoveryProviders;
+    }
+    return null;
   }
 
   private inputStillHasSelectedLawPrefix(): boolean {
@@ -680,6 +693,20 @@ export class LawLookupModal extends Modal {
             await this.settingsStore.setDefaultChLawLanguage?.(value);
             if (this.lookupInputValue().trim()) void this.renderParsedReference();
           });
+      });
+    } else if (this.selectedJurisdiction === "FI") {
+      new Setting(this.actionsEl).setName(this.ui.defaultFiTextLanguage ?? "Finnish text language").addDropdown((dropdown) => {
+        dropdown.addOption("fi", "Suomi");
+        dropdown.addOption("sv", "Svenska");
+        dropdown.setValue(this.selectedFiLanguage).onChange(async (value) => {
+          if (value !== "fi" && value !== "sv") return;
+          this.selectedFiLanguage = value;
+          await this.settingsStore.setDefaultFiLawLanguage?.(value);
+          this.currentSection = null;
+          this.currentMarkdown = "";
+          this.renderResultMessage(this.ui.noLookupRunYet);
+          this.renderActions();
+        });
       });
     } else if (this.selectedJurisdiction === "DE") {
       new Setting(this.actionsEl).setName(this.ui.useEnglishTranslationWhenAvailable).addToggle((toggle) => {

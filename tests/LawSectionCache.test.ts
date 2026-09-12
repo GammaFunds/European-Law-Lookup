@@ -5,6 +5,7 @@ import type { LawProvider } from "../src/law/LawProvider";
 import {
   CachedLawProvider,
   InMemoryLawSectionCache,
+  type LawSectionCache,
   StoredLawSectionCache,
   lawSectionCacheKey,
 } from "../src/law/LawSectionCache";
@@ -139,7 +140,7 @@ describe("settings tab rendering", () => {
     }>;
     assert.deepEqual(
       controls.map((definition) => definition.control.key),
-      ["enableLawSectionCache", "inputLayout", "defaultJurisdiction", "defaultEuLawLanguage", "defaultLawSourceVariant", "lawSectionCacheTtlDays"],
+      ["enableLawSectionCache", "inputLayout", "defaultJurisdiction", "defaultEuLawLanguage", "defaultFiLawLanguage", "defaultLawSourceVariant", "lawSectionCacheTtlDays"],
     );
     assert.ok(definitions.some((definition) => typeof definition.render === "function"));
     assert.ok(definitions.every((definition) => typeof definition.name === "string" && definition.name.length > 0));
@@ -178,6 +179,22 @@ describe("settings tab rendering", () => {
 });
 
 describe("lawSectionCacheKey", () => {
+  it("isolates Finnish and Swedish Finlex cache keys", async () => {
+    const fin = { lawCode: "729/2018", section: "1", jurisdiction: "FI" as never, language: "fin" };
+    const swe = { ...fin, language: "swe" };
+    assert.equal(lawSectionCacheKey(fin), "FI:729/2018:1:official-fi");
+    assert.equal(lawSectionCacheKey({ ...fin, language: undefined }), "FI:729/2018:1:official-fi");
+    assert.equal(lawSectionCacheKey(swe), "FI:729/2018:1:official-sv");
+    assert.notEqual(lawSectionCacheKey(fin), lawSectionCacheKey(swe));
+    const cache = new InMemoryLawSectionCache();
+    await cache.set(section({ ...fin, text: "Suomi", language: "fin" }));
+    assert.equal((await cache.get(swe))?.text, undefined);
+  });
+
+  it("does not create a Finnish cache key for an unknown language", () => {
+    assert.equal(lawSectionCacheKey({ lawCode: "729/2018", section: "1", jurisdiction: "FI" as never, language: "de" }), null);
+  });
+
   it("isolates EU official language cache keys without legacy fallback", async () => {
     const de = { lawCode: "DSGVO", section: "6", referenceType: "article" as const, jurisdiction: "EU" as const, language: "de" as const, euCelex: "32016R0679" as const };
     const en = { ...de, language: "en" as const };
@@ -493,6 +510,17 @@ describe("F4 euLanguageCacheToken fail-closed isolation", () => {
 });
 
 describe("CachedLawProvider", () => {
+  const fiReference: LawReference = {
+    lawCode: "729/2018", section: "1", referenceType: "section", jurisdiction: "FI", language: "fin",
+  };
+
+  function fiCacheWith(cached: LawSection | null): LawSectionCache {
+    return {
+      async get() { return cached; },
+      async set() {},
+    };
+  }
+
   it("does not call provider or cache during construction", () => {
     let providerCalls = 0;
     let cacheCalls = 0;
@@ -518,6 +546,40 @@ describe("CachedLawProvider", () => {
 
     assert.equal(providerCalls, 0);
     assert.equal(cacheCalls, 0);
+  });
+
+  it("returns a matching FI Finlex cached section", async () => {
+    const cached = section({ providerId: "finlex", providerLabel: "Finlex", lawCode: "729/2018", section: "1", jurisdiction: "FI", language: "fin", referenceType: "section" });
+    const provider = new CachedLawProvider(lawProvider(async () => null), fiCacheWith(cached), { allowedProviderIds: ["finlex"] });
+    assert.equal((await provider.getSection(fiReference))?.text, cached.text);
+  });
+
+  it("rejects poisoned FI cache content instead of returning it", async () => {
+    const poisons: Array<[string, Partial<LawSection>]> = [
+      ["wrong language", { language: "swe" }],
+      ["wrong law", { lawCode: "731/1999" }],
+      ["wrong section", { section: "2" }],
+      ["wrong jurisdiction", { jurisdiction: "DE" }],
+      ["wrong provider", { providerId: "gesetze-im-internet" }],
+      ["incompatible reference type", { referenceType: "article" }],
+    ];
+    for (const [name, poison] of poisons) {
+      const provider = new CachedLawProvider(
+        lawProvider(async () => null),
+        fiCacheWith(section({ providerId: "finlex", providerLabel: "Finlex", lawCode: "729/2018", section: "1", jurisdiction: "FI", language: "fin", referenceType: "section", ...poison })),
+        { allowedProviderIds: ["finlex"] },
+      );
+      assert.equal(await provider.getSection(fiReference), null, name);
+    }
+  });
+
+  it("does not fall back to an unprefixed legacy FI cache key", async () => {
+    const cache = new StoredLawSectionCache({
+      async load() { return { "729/2018:1:official-de": section({ providerId: "finlex", jurisdiction: "FI", language: "fin" }) }; },
+      async save() {},
+    });
+    const provider = new CachedLawProvider(lawProvider(async () => null), cache, { allowedProviderIds: ["finlex"] });
+    assert.equal(await provider.getSection(fiReference), null);
   });
 
   it("does not call provider or cache while composing cached providers", () => {

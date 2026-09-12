@@ -13,6 +13,7 @@ export type ParsedLawReference = LawReference;
 const lawCodePattern = String.raw`[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9-]*`;
 const sectionPattern = String.raw`\d+[A-Za-z]?`;
 const spanishSectionPattern = String.raw`\d+(?:[A-Za-z]|\s+(?:bis|ter|quater|quinquies|sexies))?`;
+const finnishLawCodePattern = String.raw`\d{1,6}/\d{4}`;
 const articleMarkerPattern = String.raw`(?:Art\.?|Artikel)`;
 const explicitSlashLawCodes = [
   "FreizügG/EU",
@@ -223,6 +224,9 @@ export function parseLawReferenceWithSelectedJurisdiction(
   if (selectedJurisdiction === "ES") {
     return parseSpanishLawReference(input);
   }
+  if (selectedJurisdiction === "FI") {
+    return parseFinnishLawReference(input);
+  }
   const parsedReference = parseLawReference(input);
   if (parsedReference) {
     if (
@@ -288,6 +292,15 @@ export function parseLawReferenceWithSelectedJurisdiction(
     }
   }
 
+  return null;
+}
+
+function parseFinnishLawReference(input: string): ParsedLawReference | null {
+  const normalized = input.trim().replace(/\s+/g, " ");
+  const lawFirst = new RegExp(`^(${finnishLawCodePattern})\\s+§\\s*(\\d+)$`, "u").exec(normalized);
+  if (lawFirst) return { lawCode: lawFirst[1], section: lawFirst[2], referenceType: "section", jurisdiction: "FI" };
+  const sectionFirst = new RegExp(`^§\\s*(\\d+)\\s+(${finnishLawCodePattern})$`, "u").exec(normalized);
+  if (sectionFirst) return { lawCode: sectionFirst[2], section: sectionFirst[1], referenceType: "section", jurisdiction: "FI" };
   return null;
 }
 

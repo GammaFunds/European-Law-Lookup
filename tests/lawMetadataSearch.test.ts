@@ -481,7 +481,14 @@ function buildAutocompleteModalHarness(
     getInputLayout: () => inputLayout,
   };
   const indexProvider = { getEuActIndex: () => makeAutocompleteEuIndex() };
-  const modal = new LawLookupModal({}, providerRegistry, settingsStore, ui, indexProvider, discoveryProvider);
+  const modalDiscoveryProvider = discoveryProvider
+    ? {
+      ...(discoveryProvider as object),
+      jurisdiction,
+      sourceLabel: "BOE",
+    }
+    : null;
+  const modal = new LawLookupModal({}, providerRegistry, settingsStore, ui, indexProvider, modalDiscoveryProvider);
   modal.onOpen();
   const formEl = modal.contentEl.children[1];
   const inputEl = formEl.children.find((child) => child.tagName === "INPUT" && child.cls === "")!;
@@ -558,7 +565,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
 
   it("opens with the persisted jurisdiction and keeps the required option order without lookup", () => {
     const harness = buildAutocompleteModalHarness("CH", "single", "CH");
-    assert.deepEqual(harness.jurisdictionSelect.children.map((option) => option.value), ["EU", "DE", "AT", "CH", "ES"]);
+    assert.deepEqual(harness.jurisdictionSelect.children.map((option) => option.value), ["EU", "DE", "AT", "CH", "ES", "FI"]);
     assert.equal(harness.jurisdictionSelect.value, "CH");
     assert.equal(harness.requests.length, 0);
   });
@@ -624,6 +631,21 @@ describe("LawLookupModal metadata autocomplete integration", () => {
     assert.equal(suggestions.children.length, 1);
     assert.match(suggestions.children[0].text, /Ley 40\/2015/u);
     assert.match(suggestions.children[0].text, /BOE-A-2015-10566/u);
+  });
+
+  it("caps generic discovery suggestions at eight results", async () => {
+    const discoveryProvider = {
+      search: async () => ({
+        kind: "results" as const,
+        entries: Array.from({ length: 9 }, (_, index) => boeEntry(`Law ${index + 1}`)),
+      }),
+    };
+    const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
+    harness.inputEl.value = "regimen";
+    harness.inputEl.fire("input");
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+
+    assert.equal(suggestionsFor(harness.formEl).children.length, 8);
   });
 
   it("shows a loading indicator only after the debounced BOE request begins", async () => {

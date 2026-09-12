@@ -1,5 +1,5 @@
 import type { LawSourceVariant } from "../law/types";
-import { UI_LANGUAGE_CODES, UI_STRINGS } from "./i18nCatalog";
+import { FINLAND_UI_STRINGS, UI_LANGUAGE_CODES, UI_STRINGS } from "./i18nCatalog";
 
 export type UiLanguage = "bg" | "cs" | "da" | "de" | "el" | "en" | "es" | "et" | "fi" | "fr" | "ga" | "hr" | "hu" | "it" | "lt" | "lv" | "mt" | "nl" | "pl" | "pt" | "ro" | "sk" | "sl" | "sv";
 export { UI_LANGUAGE_CODES };
@@ -60,6 +60,7 @@ export interface UiStrings extends UiPresentationStrings {
   jurisdictionAustria: string;
   jurisdictionSwitzerland: string;
   jurisdictionSpain: string;
+  jurisdictionFinland?: string;
   jurisdictionEuropeanUnion: string;
   euTextLanguage: string;
   defaultEuTextLanguage: string;
@@ -69,6 +70,12 @@ export interface UiStrings extends UiPresentationStrings {
   spainAcceptedInputFormats: string;
   spainInputExamples: string;
   spainScopeNote: string;
+  defaultFiTextLanguage?: string;
+  defaultFiTextLanguageDescription?: string;
+  finlandAcceptedInputFormats?: string;
+  finlandInputExamples?: string;
+  finlandScopeNote?: string;
+  finlandConsolidatedNotice?: string;
   directCelexCitation: string;
   structuredArticleFirst: string;
   structuredActFirst: string;
@@ -139,6 +146,6 @@ const DEFAULT_JURISDICTION_STRINGS: Record<UiLanguage, { defaultJurisdiction: st
 
 export function getUiStrings(languageCode: unknown): UiStrings & { defaultJurisdiction: string; defaultJurisdictionDescription: string } {
   const language = resolveUiLanguage(languageCode);
-  return { ...UI_STRINGS[language], ...DEFAULT_JURISDICTION_STRINGS[language] };
+  return { ...UI_STRINGS[language], ...FINLAND_UI_STRINGS[language], ...DEFAULT_JURISDICTION_STRINGS[language] };
 }
 export function defaultLawSourceVariantForLanguage(_languageCode: unknown, storedValue?: LawSourceVariant): LawSourceVariant { return storedValue === "official-de" || storedValue === "translation-en" ? storedValue : "official-de"; }

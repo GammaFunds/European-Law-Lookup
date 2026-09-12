@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import type { LawDiscoveryProvider } from "../src/law/LawDiscovery";
 
 interface CapturedRequest {
   url: string;
@@ -18,6 +19,8 @@ interface BoeDiscoveryResult {
 }
 
 interface BoeLawDiscoveryLike {
+  jurisdiction: "ES";
+  sourceLabel: string;
   search(query: string): Promise<BoeDiscoveryResult>;
 }
 
@@ -97,6 +100,14 @@ function emittedQuery(requests: CapturedRequest[]): string {
 }
 
 describe("BOE law discovery", () => {
+  it("implements the jurisdiction-aware generic discovery provider contract", () => {
+    const discovery = new BoeLawDiscovery(async () => makeResponse([]));
+    const provider: LawDiscoveryProvider = discovery;
+
+    assert.equal(provider.jurisdiction, "ES");
+    assert.equal(provider.sourceLabel, "BOE");
+  });
+
   it("binds every human title token to titulo", async () => {
     for (const [input, expected] of [
       ["Régimen Jurídico", "titulo:Régimen AND titulo:Jurídico"],

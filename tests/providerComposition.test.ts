@@ -44,6 +44,7 @@ function routingProviders(calls: string[], winner: string): LawProvider[] {
     recordingProvider("gesetze-im-internet", calls, winner === "gesetze-im-internet" ? "section" : "null"),
     recordingProvider("ris", calls, winner === "ris" ? "section" : "null"),
     recordingProvider("boe", calls, winner === "boe" ? "section" : "null"),
+    recordingProvider("finlex", calls, winner === "finlex" ? "section" : "null"),
   ];
 }
 
@@ -53,7 +54,7 @@ describe("provider composition", () => {
 
     assert.deepEqual(
       providers.map((provider) => provider.id),
-      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe"],
+      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex"],
     );
   });
 
@@ -62,7 +63,7 @@ describe("provider composition", () => {
 
     assert.deepEqual(
       providers.map((provider) => provider.id),
-      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "mock"],
+      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex", "mock"],
     );
   });
 
@@ -85,7 +86,7 @@ describe("provider composition", () => {
   });
 
   it("permits cached EUR-Lex sections", () => {
-    assert.deepEqual(allowedCachedProviderIds(false), ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe"]);
+    assert.deepEqual(allowedCachedProviderIds(false), ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex"]);
   });
 
   it("isolates ES invocation to BOE", async () => {
@@ -132,6 +133,15 @@ describe("provider composition", () => {
     await registry.getSection({ lawCode: "BV", section: "8", jurisdiction: "CH" });
 
     assert.deepEqual(calls, ["fedlex"]);
+  });
+
+  it("routes FI only to Finlex", async () => {
+    const calls: string[] = [];
+    const registry = new ProviderRegistry(routingProviders(calls, "finlex"));
+
+    await registry.getSection({ lawCode: "729/2018", section: "1", jurisdiction: "FI" as never });
+
+    assert.deepEqual(calls, ["finlex"]);
   });
 
   it("preserves DE routing for an undefined jurisdiction", async () => {

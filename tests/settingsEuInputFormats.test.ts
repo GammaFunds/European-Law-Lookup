@@ -218,6 +218,10 @@ function renderSettingsTab(tab: FakePlugin["settingsTab"]): FakeElement {
   return container;
 }
 
+function collectText(element: FakeElement): string {
+  return [element.textContent, ...element.children.map(collectText)].join(" ");
+}
+
 describe("EU Settings input-format presentation", () => {
   it("defaults a missing jurisdiction to EU and exposes the required order", async () => {
     const { plugin } = loadPlugin("en", {});
@@ -229,7 +233,7 @@ describe("EU Settings input-format presentation", () => {
       getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }>;
     };
     const definition = tab.getSettingDefinitions().find((candidate) => candidate.control?.key === "defaultJurisdiction");
-    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES"]);
+    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES", "FI"]);
   });
 
   it("uses persisted default jurisdiction through the production command without provider requests", async () => {
@@ -249,7 +253,7 @@ describe("EU Settings input-format presentation", () => {
   });
 
   it("round-trips supported jurisdiction values and fails malformed data back to EU", async () => {
-    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES"] as const) {
+    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES", "FI"] as const) {
       const { plugin } = loadPlugin("en", { defaultJurisdiction: jurisdiction });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
       assert.equal(
@@ -264,6 +268,28 @@ describe("EU Settings input-format presentation", () => {
       (plugin as unknown as { getSettings(): { defaultJurisdiction: string } }).getSettings().defaultJurisdiction,
       "EU",
     );
+  });
+
+  it("persists Finnish text language and renders a live Finlex panel without a corpus list", async () => {
+    const { plugin } = loadPlugin("en", { defaultFiLawLanguage: "bad" });
+    await (plugin as unknown as { onload(): Promise<void> }).onload();
+    assert.equal((plugin as unknown as { getSettings(): { defaultFiLawLanguage: string } }).getSettings().defaultFiLawLanguage, "fi");
+    const tab = plugin.settingsTab as unknown as {
+      getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }>;
+      setControlValue(key: string, value: unknown): Promise<void>;
+    };
+    const language = tab.getSettingDefinitions().find((definition) => definition.control?.key === "defaultFiLawLanguage");
+    assert.deepEqual(language?.control?.options, { fi: "Suomi", sv: "Svenska" });
+    await tab.setControlValue("defaultFiLawLanguage", "sv");
+    assert.equal((plugin as unknown as { getSettings(): { defaultFiLawLanguage: string } }).getSettings().defaultFiLawLanguage, "sv");
+    assert.equal((plugin as unknown as { storedData: Record<string, unknown> }).storedData.defaultFiLawLanguage, "sv");
+
+    const container = renderSettingsTab(plugin.settingsTab);
+    const panel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-finland");
+    assert.ok(panel);
+    assert.match(collectText(panel), /Finlex/);
+    assert.match(collectText(panel), /729\/2018 § 1/);
+    assert.equal(panel.children.some((child) => child.className === "de-law-settings-supported-table"), false);
   });
 
   it("persists a changed default jurisdiction without changing existing language settings", async () => {
@@ -407,7 +433,7 @@ describe("EU Settings input-format presentation", () => {
 
     const tabs = container.children.find((child) => child.className === "de-law-settings-jurisdiction-tabs")!;
     assert.equal(tabs.attributes.get("role"), "tablist");
-    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab", "tab"]);
+    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab", "tab", "tab"]);
   });
 });
 
