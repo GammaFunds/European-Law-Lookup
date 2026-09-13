@@ -8,6 +8,14 @@ interface CitationFormatterOptions {
   presentationStrings?: Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata">;
 }
 
+export function getLawSectionDisplayLabel(section: LawSection): string | undefined {
+  if (section.jurisdiction === "IT") {
+    const lawTitle = section.lawTitle.trim();
+    return lawTitle || undefined;
+  }
+  return section.lawCode;
+}
+
 export function formatLawSectionAsMarkdown(
   section: LawSection,
   options: CitationFormatterOptions = {},
@@ -16,6 +24,7 @@ export function formatLawSectionAsMarkdown(
   const retrievedDate = section.retrievedAt.slice(0, 10);
   const includeMetadataFooter = options.includeMetadataFooter !== false;
   const referenceLabel = formatReferenceLabel(section);
+  const lawLabel = getLawSectionDisplayLabel(section);
   const strings = {
     live: "live",
     cached: "cached",
@@ -30,7 +39,7 @@ export function formatLawSectionAsMarkdown(
   };
 
   const lines = [
-    `> **${referenceLabel} ${section.lawCode}${heading}**`,
+    `> **${referenceLabel}${lawLabel ? ` ${lawLabel}` : ""}${heading}**`,
     ">",
     ...section.text.split("\n").map((line) => `> ${line}`),
   ];
@@ -55,9 +64,15 @@ export function formatLawSectionAsMarkdown(
   }
 
   if (includeMetadataFooter) {
+    const sourceMetadata = strings.sourceMetadata
+      .replace(", {lawCode}", lawLabel ? `, ${lawLabel}` : "")
+      .replace("{lawCode}", lawLabel ?? "")
+      .replace("{provider}", section.providerLabel)
+      .replace("{reference}", referenceLabel)
+      .replace("{date}", retrievedDate);
     lines.push(
       "",
-      strings.sourceMetadata.replace("{provider}", section.providerLabel).replace("{lawCode}", section.lawCode).replace("{reference}", referenceLabel).replace("{date}", retrievedDate),
+      sourceMetadata,
       strings.cacheMetadata.replace("{status}", localizedCacheStatus(section.cacheStatus, strings)),
     );
   }

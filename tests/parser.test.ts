@@ -3,6 +3,74 @@ import { describe, it } from "node:test";
 import { parseLawReference, parseLawReferenceWithSelectedJurisdiction } from "../src/parser";
 
 describe("parseLawReference", () => {
+  it("parses strict Normattiva Article identities only for IT", () => {
+    for (const input of [
+      "normattiva:2005-05-16:005G0104 Art. 20",
+      "Art. 20 normattiva:2005-05-16:005G0104",
+    ]) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "IT"), {
+        lawCode: "normattiva:2005-05-16:005G0104",
+        section: "20",
+        referenceType: "article",
+        jurisdiction: "IT",
+      });
+    }
+    for (const input of [
+      "normattiva:2005-05-16:005G0104 Art. 13-bis",
+      "normattiva:2005-05-16:005G0104 Art. 13bis",
+      "Art. 20 normattiva:2005-05-16:",
+      "Art. 20 urn:nir:stato:decreto.legislativo:2005-03-07;82",
+      "Art. 20 normattiva:2026-02-30:005G0104",
+    ]) assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "IT"), null, input);
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("Art. 20 normattiva:2005-05-16:005G0104", "DE"), null);
+  });
+
+  it("preserves the ordinary positive-decimal Italy Article control", () => {
+    assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20 normattiva:2005-05-16:005G0104",
+      "IT",
+    ), {
+      lawCode: "normattiva:2005-05-16:005G0104",
+      section: "20",
+      referenceType: "article",
+      jurisdiction: "IT",
+    });
+  });
+
+  it("rejects an Italy comma-level reference without simplifying it to Article 20", () => {
+    assert.equal(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20, comma 1 normattiva:2005-05-16:005G0104",
+      "IT",
+    ), null);
+  });
+
+  it("rejects an Italy point-level reference without simplifying it to Article 20", () => {
+    assert.equal(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20, punto 1 normattiva:2005-05-16:005G0104",
+      "IT",
+    ), null);
+  });
+
+  it("rejects an Italy letter-level reference without simplifying it to Article 20", () => {
+    assert.equal(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20, lettera a normattiva:2005-05-16:005G0104",
+      "IT",
+    ), null);
+  });
+
+  it("rejects an Italy group-level reference without simplifying it to Article 20", () => {
+    assert.equal(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20, gruppo 1 normattiva:2005-05-16:005G0104",
+      "IT",
+    ), null);
+  });
+
+  it("rejects an Italy attachment reference without simplifying it to Article 20", () => {
+    assert.equal(parseLawReferenceWithSelectedJurisdiction(
+      "Art. 20, allegato 1 normattiva:2005-05-16:005G0104",
+      "IT",
+    ), null);
+  });
   it("parses Finnish statute-number section references only in FI", () => {
     for (const input of ["729/2018 § 1", "§ 1 729/2018"]) {
       assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "FI" as never), {

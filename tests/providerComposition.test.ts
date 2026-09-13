@@ -45,6 +45,7 @@ function routingProviders(calls: string[], winner: string): LawProvider[] {
     recordingProvider("ris", calls, winner === "ris" ? "section" : "null"),
     recordingProvider("boe", calls, winner === "boe" ? "section" : "null"),
     recordingProvider("finlex", calls, winner === "finlex" ? "section" : "null"),
+    recordingProvider("normattiva", calls, winner === "normattiva" ? "section" : "null"),
   ];
 }
 
@@ -54,7 +55,7 @@ describe("provider composition", () => {
 
     assert.deepEqual(
       providers.map((provider) => provider.id),
-      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex"],
+      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex", "normattiva"],
     );
   });
 
@@ -63,7 +64,7 @@ describe("provider composition", () => {
 
     assert.deepEqual(
       providers.map((provider) => provider.id),
-      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex", "mock"],
+      ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex", "normattiva", "mock"],
     );
   });
 
@@ -142,6 +143,15 @@ describe("provider composition", () => {
     await registry.getSection({ lawCode: "729/2018", section: "1", jurisdiction: "FI" as never });
 
     assert.deepEqual(calls, ["finlex"]);
+  });
+
+  it("routes IT only to Normattiva", async () => {
+    const calls: string[] = [];
+    const registry = new ProviderRegistry(routingProviders(calls, "normattiva"));
+
+    await registry.getSection({ lawCode: "normattiva:2005-05-16:005G0104", section: "20", jurisdiction: "IT" });
+
+    assert.deepEqual(calls, ["normattiva"]);
   });
 
   it("preserves DE routing for an undefined jurisdiction", async () => {

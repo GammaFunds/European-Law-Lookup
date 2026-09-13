@@ -158,13 +158,19 @@ export class CachedLawProvider implements LawProvider {
   async getSection(reference: LawReference): Promise<LawSection | null> {
     const liveSection = await this.wrappedProvider.getSection(reference);
     if (liveSection) {
-      try {
-        await this.cache.set(liveSection);
-      } catch {
-        // Cache writes are best-effort; a live provider result must remain usable.
+      if (this.isAllowedCachedProvider(liveSection.providerId)) {
+        try {
+          await this.cache.set(liveSection);
+        } catch {
+          // Cache writes are best-effort; a live provider result must remain usable.
+        }
       }
 
       return liveSection;
+    }
+
+    if (reference.jurisdiction === "IT") {
+      return null;
     }
 
     const cachedSection = await this.cache.get(reference);

@@ -5,6 +5,39 @@ import { getUiStrings } from "../src/ui/i18n";
 import type { LawSection } from "../src/law/types";
 
 describe("formatLawSectionAsMarkdown", () => {
+  it("uses the source-backed Italy law title in heading and metadata", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "normattiva",
+      providerLabel: "Normattiva",
+      lawCode: "normattiva:2005-05-16:005G0104",
+      lawTitle: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+      section: "20",
+      referenceType: "article",
+      jurisdiction: "IT",
+      text: "Meaningful Article 20 body.",
+      retrievedAt: "2026-09-13T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+    });
+
+    assert.match(markdown, /> \*\*Art\. 20 DECRETO LEGISLATIVO 7 marzo 2005, n\. 82\*\*/);
+    assert.match(markdown, /Quelle: Normattiva, DECRETO LEGISLATIVO 7 marzo 2005, n\. 82, Art\. 20/);
+    assert.doesNotMatch(markdown, /normattiva:/);
+  });
+
+  it("fails closed when an Italy source-backed law title is absent", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "normattiva", providerLabel: "Normattiva", lawCode: "normattiva:2005-05-16:005G0104", lawTitle: "",
+      section: "20", referenceType: "article", jurisdiction: "IT", text: "Article body.",
+      retrievedAt: "2026-09-13T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true,
+    });
+
+    assert.match(markdown, /> \*\*Art\. 20\*\*/);
+    assert.match(markdown, /> Article body\./);
+    assert.doesNotMatch(markdown, /normattiva:/);
+  });
+
   it("labels official EU language versions without a translation warning", () => {
     const markdown = formatLawSectionAsMarkdown({ providerId: "eur-lex", providerLabel: "EUR-Lex", lawCode: "DSGVO", lawTitle: "Regulation (EU) 2016/679", section: "6", referenceType: "article", jurisdiction: "EU", language: "en", text: "Lawful processing.", retrievedAt: "2026-07-10T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true });
     assert.match(markdown, /^Amtliche EU-Sprachfassung: English\.$/m);

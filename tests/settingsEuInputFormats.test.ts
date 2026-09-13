@@ -233,7 +233,30 @@ describe("EU Settings input-format presentation", () => {
       getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }>;
     };
     const definition = tab.getSettingDefinitions().find((candidate) => candidate.control?.key === "defaultJurisdiction");
-    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES", "FI"]);
+    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES", "FI", "IT"]);
+  });
+
+  it("renders Italy support without a language setting", async () => {
+    const { plugin } = loadPlugin("en", {});
+    await (plugin as unknown as { onload(): Promise<void> }).onload();
+    const container = renderSettingsTab(plugin.settingsTab);
+    const italyPanel = container.children.find((child) => child.id === "de-law-jurisdiction-panel-italy");
+    assert.ok(italyPanel);
+    const text = collectText(italyPanel);
+    assert.match(text, /Italy/);
+    assert.match(text, /Normattiva/);
+    assert.match(text, /Italian-language articles/);
+    assert.match(text, /ordinary positive-decimal Articles only/i);
+    assert.match(text, /bis.*deferred/i);
+    assert.match(text, /comma.*direct lookup.*deferred/i);
+    assert.match(text, /official public source/i);
+    assert.match(text, /informational.*non-authentic/i);
+    assert.match(text, /definitive.*official.*Gazzetta Ufficiale/i);
+    assert.match(text, /non-authentic/);
+    const definitions = (plugin.settingsTab as unknown as { getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }> }).getSettingDefinitions();
+    assert.equal(definitions.some((definition) => definition.control?.key === "defaultItLawLanguage"), false);
+    const italyTab = container.children.find((child) => child.className === "de-law-settings-jurisdiction-tabs")?.children.find((child) => child.textContent === "Italy");
+    assert.ok(italyTab);
   });
 
   it("uses persisted default jurisdiction through the production command without provider requests", async () => {
@@ -253,7 +276,7 @@ describe("EU Settings input-format presentation", () => {
   });
 
   it("round-trips supported jurisdiction values and fails malformed data back to EU", async () => {
-    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES", "FI"] as const) {
+    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES", "FI", "IT"] as const) {
       const { plugin } = loadPlugin("en", { defaultJurisdiction: jurisdiction });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
       assert.equal(
@@ -433,7 +456,7 @@ describe("EU Settings input-format presentation", () => {
 
     const tabs = container.children.find((child) => child.className === "de-law-settings-jurisdiction-tabs")!;
     assert.equal(tabs.attributes.get("role"), "tablist");
-    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab", "tab", "tab"]);
+    assert.deepEqual(tabs.children.map((tab) => tab.attributes.get("role")), ["tab", "tab", "tab", "tab", "tab", "tab", "tab"]);
   });
 });
 

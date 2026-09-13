@@ -521,6 +521,98 @@ describe("CachedLawProvider", () => {
     };
   }
 
+  it("does not persist a live result from a disallowed provider", async () => {
+    let getCalls = 0;
+    let setCalls = 0;
+    const liveSection = section({ providerId: "normattiva", providerLabel: "Normattiva" });
+    const cache: LawSectionCache = {
+      async get() {
+        getCalls += 1;
+        return null;
+      },
+      async set() {
+        setCalls += 1;
+      },
+    };
+    const provider = new CachedLawProvider(
+      lawProvider(async () => liveSection),
+      cache,
+      { allowedProviderIds: ["boe"] },
+    );
+
+    assert.deepEqual(await provider.getSection(reference()), liveSection);
+    assert.equal(setCalls, 0);
+    assert.equal(getCalls, 0);
+  });
+
+  it("does not read or write persistent cache after a null Normattiva result", async () => {
+    let getCalls = 0;
+    let setCalls = 0;
+    const italyReference: LawReference = {
+      lawCode: "normattiva:1942-04-04:042U0262",
+      section: "1",
+      referenceType: "article",
+      jurisdiction: "IT",
+      language: "it",
+      normattivaAct: {
+        title: "CODICE CIVILE",
+        actType: "REGIO DECRETO",
+        actDate: "1942-04-04",
+        actNumber: 262,
+        guDate: "1942-04-04",
+      },
+    };
+    const cache: LawSectionCache = {
+      async get() {
+        getCalls += 1;
+        return null;
+      },
+      async set() {
+        setCalls += 1;
+      },
+    };
+    const provider = new CachedLawProvider(
+      lawProvider(async () => null),
+      cache,
+      { allowedProviderIds: ["eur-lex", "fedlex", "neuris", "gesetze-im-internet", "ris", "boe", "finlex"] },
+    );
+
+    assert.equal(await provider.getSection(italyReference), null);
+    assert.equal(getCalls, 0);
+    assert.equal(setCalls, 0);
+  });
+
+  it("persists a live result from an allowed provider", async () => {
+    let setCalls = 0;
+    const liveSection = section({ providerId: "boe", providerLabel: "BOE" });
+    const cache: LawSectionCache = {
+      async get() { return null; },
+      async set() { setCalls += 1; },
+    };
+    const provider = new CachedLawProvider(
+      lawProvider(async () => liveSection),
+      cache,
+      { allowedProviderIds: ["boe"] },
+    );
+
+    assert.deepEqual(await provider.getSection(reference()), liveSection);
+    assert.equal(setCalls, 1);
+  });
+
+  it("keeps live results usable when an allowed cache write fails", async () => {
+    const liveSection = section({ providerId: "boe", providerLabel: "BOE" });
+    const provider = new CachedLawProvider(
+      lawProvider(async () => liveSection),
+      {
+        async get() { return null; },
+        async set() { throw new Error("cache unavailable"); },
+      },
+      { allowedProviderIds: ["boe"] },
+    );
+
+    assert.deepEqual(await provider.getSection(reference()), liveSection);
+  });
+
   it("does not call provider or cache during construction", () => {
     let providerCalls = 0;
     let cacheCalls = 0;

@@ -15,6 +15,7 @@ import { ProviderRegistry } from "./law/ProviderRegistry";
 import { buildCachedLawProviders } from "./law/cachedProviderComposition";
 import {
   createCellarSparqlJsonFetcher,
+  createObsidianRequestUrlPostTransport,
   createObsidianRequestUrlTransport,
 } from "./law/httpTransport";
 import { buildLawProviders } from "./law/providerComposition";
@@ -30,6 +31,7 @@ import {
 import { getSupportedBoeLaws } from "./law/providers/boeMapping";
 import { BoeLawDiscovery } from "./law/providers/BoeLawDiscovery";
 import { FinlexLawDiscovery } from "./law/providers/FinlexLawDiscovery";
+import { NormattivaLawDiscovery } from "./law/providers/NormattivaLawDiscovery";
 import type { LawDiscoveryProvider } from "./law/LawDiscovery";
 import {
   normalizeFedlexLanguage,
@@ -173,6 +175,7 @@ export default class DeLawPlugin extends Plugin {
           new Map<LawJurisdiction, LawDiscoveryProvider>([
             ["ES", new BoeLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
             ["FI", new FinlexLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
+            ["IT", new NormattivaLawDiscovery(createObsidianRequestUrlPostTransport(requestUrl))],
           ]),
         );
         this.activeLawLookupModal = modal;
@@ -486,6 +489,7 @@ class DeLawSettingsTab extends PluginSettingTab {
             CH: ui.jurisdictionSwitzerland,
             ES: ui.jurisdictionSpain,
             FI: ui.jurisdictionFinland ?? "Finland",
+            IT: ui.jurisdictionItaly!,
           },
         },
       },
@@ -601,6 +605,7 @@ class DeLawSettingsTab extends PluginSettingTab {
       { label: ui.jurisdictionSwitzerland, tabId: "de-law-jurisdiction-tab-switzerland", panelId: "de-law-jurisdiction-panel-switzerland" },
       { label: ui.jurisdictionSpain, tabId: "de-law-jurisdiction-tab-spain", panelId: "de-law-jurisdiction-panel-spain" },
       { label: ui.jurisdictionFinland ?? "Finland", tabId: "de-law-jurisdiction-tab-finland", panelId: "de-law-jurisdiction-panel-finland" },
+      { label: ui.jurisdictionItaly!, tabId: "de-law-jurisdiction-tab-italy", panelId: "de-law-jurisdiction-panel-italy" },
     ];
 
     const tabs: HTMLButtonElement[] = [];
@@ -657,6 +662,7 @@ class DeLawSettingsTab extends PluginSettingTab {
     this.renderSpainInputFormats(panels[4], ui);
     panels[5].createEl("p", { cls: "de-law-settings-supported-description", text: ui.finlandScopeNote });
     this.renderFinlandInputFormats(panels[5], ui);
+    panels[6].createEl("p", { cls: "de-law-settings-supported-description", text: ui.italySupportDescription! });
 
     const allTabs = tabs;
     const allPanels = panels;
@@ -806,5 +812,5 @@ function normalizeTtlDays(value: unknown): number | null {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
 }

@@ -8,6 +8,9 @@ import type { ProviderRegistry } from "../src/law/ProviderRegistry";
 import type { EuLawLanguage, LawJurisdiction, LawReference, LawSection } from "../src/law/types";
 import type { LawDiscoveryProvider } from "../src/law/LawDiscovery";
 import { LawDiscoveryMalformedResponseError } from "../src/law/LawDiscovery";
+import { LawProviderUnavailableError } from "../src/law/errors";
+import { LawSectionNotFoundError } from "../src/law/ProviderRegistry";
+import { NormattivaLawProvider, NormattivaSourceContractError } from "../src/law/providers/NormattivaLawProvider";
 import type { LawLookupModalIndexProvider } from "../src/ui/LawLookupModal";
 import type { UiStrings } from "../src/ui/i18n";
 
@@ -350,6 +353,8 @@ function buildModalHarness(
     throw new Error("probe-provider-unavailable");
   },
   discoveryProvider: ReadonlyMap<LawJurisdiction, LawDiscoveryProvider> | LawDiscoveryProvider | null = null,
+  ui: UiStrings = getUiStrings("en"),
+  inputLayout: "single" | "split" = "single",
 ): ModalHarness {
   FakeSetting.instances = [];
   const requests: CapturedRequest[] = [];
@@ -365,6 +370,7 @@ function buildModalHarness(
     setDefaultEuLawLanguage: async (_value: EuLawLanguage): Promise<void> => {},
     getDefaultFiLawLanguage: () => "fi" as const,
     setDefaultFiLawLanguage: async (_value: "fi" | "sv"): Promise<void> => {},
+    getInputLayout: () => inputLayout,
     getShowInsertedSourceMetadata: () => true,
     setShowInsertedSourceMetadata: async (_value: boolean): Promise<void> => {},
   };
@@ -373,15 +379,15 @@ function buildModalHarness(
     {} as App,
     providerRegistry as unknown as ProviderRegistry,
     settingsStore,
-    getUiStrings("en"),
+    ui,
     indexProvider,
     discoveryProvider,
   );
   modal.onOpen();
   const contentEl = (modal as unknown as { contentEl: FakeElement }).contentEl;
   const formEl = contentEl.children[1];
-  const inputEl = formEl.children[0];
-  const jurisdictionSelect = formEl.children[1];
+  const inputEl = formEl.children.find((child) => child.tag === "input") as FakeElement;
+  const jurisdictionSelect = formEl.children.find((child) => child.tag === "select") as FakeElement;
   jurisdictionSelect.value = "EU";
   jurisdictionSelect.fire("change");
   return { requests, inputEl, jurisdictionSelect, modal, lastRequest: () => requests[requests.length - 1] };
@@ -405,6 +411,11 @@ function languageDropdown(): FakeDropdown {
   return settingsWithDropdowns[settingsWithDropdowns.length - 1].dropdowns[0];
 }
 
+function resultMessageText(harness: ModalHarness): string {
+  const resultEl = (harness.modal as unknown as { resultEl: FakeElement }).resultEl;
+  return resultEl.children.map((child) => child.text).join(" ");
+}
+
 describe("LawLookupModal EU requested language preservation", () => {
   it("exposes Finland in the jurisdiction selector", () => {
     const harness = buildModalHarness(null);
@@ -422,6 +433,7 @@ describe("LawLookupModal EU requested language preservation", () => {
     await settle();
     assert.equal(harness.requests.length, 0);
 
+    harness.inputEl.value = "BOE-A-2015-10566 Art. 1";
     harness.inputEl.fire("keydown", { key: "Enter" });
     await settle();
     assert.equal(harness.requests.length, 1);
@@ -437,9 +449,50 @@ describe("LawLookupModal EU requested language preservation", () => {
     await settle();
     assert.equal(harness.requests.length, 0);
 
+    harness.inputEl.value = "Art. 1 GG";
     harness.inputEl.fire("keydown", { key: "Enter" });
     await settle();
     assert.equal(harness.requests.length, 1);
+  });
+
+  it("clears the single-field Italy citation and selection on jurisdiction change", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT",
+      sourceLabel: "Normattiva",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "IT",
+        canonicalInput: lawCode,
+        title: "Italian law",
+        normattivaAct: {
+          title: "Italian law",
+          actType: "DECRETO",
+          actDate: "2005-03-07",
+          actNumber: 82,
+          guDate: "2005-05-16",
+        },
+      }] }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "italian";
+    harness.inputEl.fire("input");
+    await delay(270);
+    const state = harness.modal as unknown as {
+      suggestionsEl: FakeElement;
+      selectedLaw: { canonicalInput: string } | null;
+    };
+    state.suggestionsEl.children[0].fire("click");
+    harness.inputEl.value = `${lawCode} Art. 20`;
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    await settle();
+
+    assert.equal(harness.inputEl.value, "");
+    assert.equal(state.selectedLaw, null);
+    assert.equal(state.suggestionsEl.children.length, 0);
+    assert.equal(harness.requests.length, 0);
   });
 
   it("C1: stale advisory index must not rewrite the requested language", async () => {
@@ -609,6 +662,8 @@ describe("LawLookupModal EU requested language preservation", () => {
     harness.jurisdictionSelect.value = "DE";
     harness.jurisdictionSelect.fire("change");
     assert.equal(split.currentSection, null);
+    assert.equal(split.lawInputEl.value, "");
+    assert.equal(split.referenceInputEl.value, "");
     assert.equal(harness.requests.length, 1);
   });
 });
@@ -735,6 +790,450 @@ describe("LawLookupModal FI discovery and explicit lookup", () => {
       const statusEl = state.suggestionsEl.children[0];
       assert.equal(statusEl?.getAttribute("data-discovery-status"), status);
       assert.match(statusEl?.text ?? "", /Finlex/);
+      harness.modal.onClose();
+    }
+  });
+});
+
+describe("LawLookupModal IT discovery and selection boundary", () => {
+  for (const [label, error, expected, forbidden] of [
+    ["not found", new LawSectionNotFoundError({ lawCode: "normattiva:test", section: "20" } as LawReference), "not found", ["unavailable", "verified"]],
+    ["provider unavailable", new LawProviderUnavailableError("normattiva", "offline"), "unavailable", ["not found", "verified"]],
+    ["source contract failure", new NormattivaSourceContractError('{"raw":"secret"}'), "could not be verified", ["not found", "unavailable", "secret"]],
+  ] as const) {
+    it(`renders a distinct Italy ${label} error state`, async () => {
+      const harness = buildModalHarness(null, async () => { throw error; });
+      harness.jurisdictionSelect.value = "IT";
+      harness.jurisdictionSelect.fire("change");
+      harness.inputEl.value = "normattiva:2005-05-16:005G0104 Art. 20";
+      harness.inputEl.fire("keydown", { key: "Enter" });
+      await settle();
+
+      const message = resultMessageText(harness);
+      assert.match(message, new RegExp(expected, "iu"));
+      for (const fragment of forbidden) assert.doesNotMatch(message, new RegExp(fragment, "iu"));
+    });
+  }
+
+  it("carries an actual malformed Normattiva HTTP-200 response into source-verification UI", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT",
+      sourceLabel: "Normattiva",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "IT",
+        canonicalInput: lawCode,
+        title: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+        normattivaAct: {
+          title: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+          actType: "DECRETO LEGISLATIVO",
+          actDate: "2005-03-07",
+          actNumber: 82,
+          guDate: "2005-05-16",
+        },
+      }] }),
+    };
+    let transportCalls = 0;
+    const provider = new NormattivaLawProvider(
+      "https://example.invalid",
+      async () => {
+        transportCalls += 1;
+        return { ok: true, status: 200, text: async () => "{}", json: async () => ({}) };
+      },
+      () => "2026-09-12",
+    );
+    const harness = buildModalHarness(
+      null,
+      async (reference) => {
+        try {
+          return await provider.getSection(reference);
+        } catch (error) {
+          assert.equal(error instanceof NormattivaSourceContractError, true);
+          assert.equal(error instanceof LawProviderUnavailableError, false);
+          throw error;
+        }
+      },
+      new Map([["IT", discoveryProvider]]),
+    );
+
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "decreto";
+    harness.inputEl.fire("input");
+    await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    state.suggestionsEl.children[0].fire("click");
+    harness.inputEl.value = `${lawCode} Art. 20`;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+
+    assert.equal(transportCalls, 1);
+    const message = resultMessageText(harness);
+    assert.match(message, /could not be verified/iu);
+    assert.doesNotMatch(message, /temporarily unavailable|not found|raw|secret|\{\}/iu);
+  });
+
+  it("exposes Italy, discovers Normattiva laws, and selects without looking up text", async () => {
+    let discoveryCalls = 0;
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT",
+      sourceLabel: "Normattiva",
+      search: async () => {
+        discoveryCalls += 1;
+        return {
+          kind: "results",
+          entries: Array.from({ length: 9 }, (_, index) => ({
+            jurisdiction: "IT" as const,
+            canonicalInput: `normattiva:2005-05-16:005G010${4 + index}`,
+            title: index === 0 ? "DECRETO LEGISLATIVO 7 marzo 2005, n. 82" : `Italian law ${index}`,
+            normattivaAct: {
+              title: index === 0 ? "DECRETO LEGISLATIVO 7 marzo 2005, n. 82" : `Italian law ${index}`,
+              actType: "DECRETO LEGISLATIVO",
+              actDate: "2005-03-07",
+              actNumber: 82 + index,
+              guDate: "2005-05-16",
+            },
+          })),
+        };
+      },
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+
+    assert.ok(harness.jurisdictionSelect.children.some((option) => option.value === "IT"));
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "decreto";
+    harness.inputEl.fire("input");
+    await delay(270);
+    await settle();
+
+    assert.equal(discoveryCalls, 1);
+    const state = harness.modal as unknown as {
+      suggestionsEl: FakeElement;
+      selectedLaw: { canonicalInput: string; title: string } | null;
+      selectedLawStatusEl: FakeElement;
+    };
+    assert.equal(state.suggestionsEl.children.length, 8);
+    assert.match(state.suggestionsEl.children[0]?.text ?? "", /DECRETO LEGISLATIVO 7 marzo 2005, n\. 82/);
+    assert.doesNotMatch(state.suggestionsEl.children[0]?.text ?? "", /normattiva:|005G0104/iu);
+    state.suggestionsEl.children[0].fire("click");
+    assert.equal(harness.inputEl.value, "DECRETO LEGISLATIVO 7 marzo 2005, n. 82 ");
+    assert.equal(state.selectedLaw?.canonicalInput, "normattiva:2005-05-16:005G0104");
+    assert.match(state.selectedLawStatusEl.text, /DECRETO LEGISLATIVO 7 marzo 2005, n\. 82/);
+    assert.doesNotMatch(state.selectedLawStatusEl.text, /normattiva:2005-05-16:005G0104/);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("composes a split-field Italy lookup from the selected canonical identity", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const title = "Codice dell'amministrazione digitale.";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async (query) => {
+        assert.equal(query, "Codice dell'amministrazione digitale");
+        return { kind: "results", entries: [{
+          jurisdiction: "IT", canonicalInput: lawCode, title,
+          normattivaAct: { title, actType: "DECRETO", actDate: "2005-03-07", actNumber: 82, guDate: "2005-05-16" },
+        }] };
+      },
+    };
+    const harness = buildModalHarness(
+      null,
+      async (reference) => ({
+        ...successfulSection,
+        jurisdiction: reference.jurisdiction,
+        language: reference.language,
+        lawCode: reference.lawCode,
+        section: reference.section,
+      }),
+      new Map([["IT", discoveryProvider]]),
+      getUiStrings("de"),
+      "split",
+    );
+    const state = harness.modal as unknown as {
+      formEl: FakeElement;
+      lawInputEl: FakeElement;
+      referenceInputEl: FakeElement;
+      suggestionsEl: FakeElement;
+      selectedLaw: { canonicalInput: string } | null;
+    };
+
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    state.lawInputEl.value = "Codice dell'amministrazione digitale";
+    state.lawInputEl.fire("input");
+    await delay(270);
+    await settle();
+
+    assert.equal(state.suggestionsEl.children.length, 1);
+    state.suggestionsEl.children[0].fire("click");
+    assert.equal(state.lawInputEl.value, title);
+    assert.equal(state.selectedLaw?.canonicalInput, lawCode);
+    assert.equal(harness.requests.length, 0);
+
+    // The runtime can retain a valid selected identity while the presentation
+    // string differs from the metadata title punctuation.
+    state.lawInputEl.value = "Codice dell'amministrazione digitale";
+    state.referenceInputEl.value = "Art. 20";
+    state.referenceInputEl.fire("input");
+    const lookupButton = state.formEl.children.find((child) => child.tag === "button");
+    assert.ok(lookupButton);
+    lookupButton.fire("click");
+    await settle();
+
+    assert.equal(harness.requests.length, 1);
+    assert.deepEqual(harness.lastRequest(), {
+      euCelex: undefined,
+      language: "it",
+      lawCode,
+      section: "20",
+      jurisdiction: "IT",
+      referenceType: "article",
+    });
+  });
+
+  it("performs exactly one Italian article lookup only after explicit action", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "IT", canonicalInput: lawCode, title: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+        normattivaAct: { title: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82", actType: "DECRETO LEGISLATIVO", actDate: "2005-03-07", actNumber: 82, guDate: "2005-05-16" },
+      }] }),
+    };
+    const harness = buildModalHarness(
+      null,
+      async (reference) => ({
+        ...successfulSection,
+        jurisdiction: "IT",
+        language: reference.language,
+        lawCode: reference.lawCode,
+        lawTitle: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+        section: reference.section,
+      }),
+      new Map([["IT", discoveryProvider]]),
+    );
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "decreto";
+    harness.inputEl.fire("input");
+    await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLawStatusEl: FakeElement };
+    state.suggestionsEl.children[0].fire("click");
+    assert.equal(harness.requests.length, 0);
+
+    harness.inputEl.value = "DECRETO LEGISLATIVO 7 marzo 2005, n. 82 Art. 20";
+    harness.inputEl.fire("input");
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 1);
+    assert.deepEqual(harness.lastRequest(), { euCelex: undefined, language: "it", lawCode, section: "20", jurisdiction: "IT", referenceType: "article" });
+    assert.equal(harness.inputEl.value, "DECRETO LEGISLATIVO 7 marzo 2005, n. 82 Art. 20");
+    assert.match(state.selectedLawStatusEl.text, /DECRETO LEGISLATIVO/);
+    const result = harness.modal as unknown as { resultEl: FakeElement };
+    const previewTitle = result.resultEl.children.find((child) => child.hasClass("de-law-lookup-preview-title"));
+    assert.match(previewTitle?.text ?? "", /Art\. 20 DECRETO LEGISLATIVO 7 marzo 2005, n\. 82/);
+    assert.doesNotMatch(previewTitle?.text ?? "", /normattiva:/);
+    assert.match(result.resultEl.children.find((child) => child.hasClass("de-law-source-status-notice"))?.text ?? "", /Normattiva is an official public source/);
+  });
+
+  it("invalidates the hidden Italy identity on edit and uses only a newly selected law", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const newLawCode = "normattiva:1942-04-04:042U0262";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async (query) => query.includes("civile")
+        ? ({ kind: "results", entries: [{
+          jurisdiction: "IT", canonicalInput: newLawCode, title: "REGIO DECRETO 16 marzo 1942, n. 262",
+          normattivaAct: { title: "REGIO DECRETO 16 marzo 1942, n. 262", actType: "REGIO DECRETO", actDate: "1942-03-16", actNumber: 262, guDate: "1942-04-04" },
+        }] })
+        : ({ kind: "results", entries: [{
+          jurisdiction: "IT", canonicalInput: lawCode, title: "Codice dell'amministrazione digitale",
+          normattivaAct: { title: "Codice dell'amministrazione digitale", actType: "DECRETO", actDate: "2005-03-07", actNumber: 82, guDate: "2005-05-16" },
+        }] }),
+    };
+    const harness = buildModalHarness(null, async (reference) => ({
+      ...successfulSection,
+      jurisdiction: reference.jurisdiction,
+      language: reference.language,
+      lawCode: reference.lawCode,
+      section: reference.section,
+    }), new Map([["IT", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "IT"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "codice"; harness.inputEl.fire("input"); await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: { canonicalInput: string } | null };
+    state.suggestionsEl.children[0].fire("click");
+    assert.deepEqual((state.selectedLaw as { canonicalInput: string }).canonicalInput, lawCode);
+
+    harness.inputEl.value = "A different law";
+    harness.inputEl.fire("input");
+    assert.equal(state.selectedLaw, null);
+    harness.inputEl.value = "Codice dell'amministrazione digitale Art. 20";
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 0);
+    assert.equal(harness.requests.some((request) => request.lawCode === lawCode), false);
+
+    harness.inputEl.value = "civile";
+    harness.inputEl.fire("input");
+    await delay(270);
+    state.suggestionsEl.children[0].fire("click");
+    const reselection = (harness.modal as unknown as { selectedLaw: { canonicalInput: string } | null }).selectedLaw;
+    assert.equal(reselection?.canonicalInput, newLawCode);
+
+    harness.inputEl.value = "REGIO DECRETO 16 marzo 1942, n. 262 Art. 1";
+    harness.inputEl.fire("input");
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+
+    assert.equal(harness.requests.length, 1);
+    assert.equal(harness.lastRequest().lawCode, newLawCode);
+    assert.equal(harness.requests.some((request) => request.lawCode === lawCode), false);
+  });
+
+  it("does not look up unsupported Italian article forms", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "IT", canonicalInput: lawCode, title: "Italian law",
+        normattivaAct: { title: "Italian law", actType: "DECRETO", actDate: "2005-03-07", actNumber: 82, guDate: "2005-05-16" },
+      }] }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "IT"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "italian"; harness.inputEl.fire("input"); await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    state.suggestionsEl.children[0].fire("click");
+    harness.inputEl.value = `${lawCode} Art. 13-bis`;
+    harness.inputEl.fire("keydown", { key: "Enter" });
+    await settle();
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("suppresses stale Italy results and clears selection when jurisdiction changes", async () => {
+    const resolvers: Array<(result: Awaited<ReturnType<LawDiscoveryProvider["search"]>>) => void> = [];
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async () => new Promise((resolve) => { resolvers.push(resolve); }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "IT"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "old italy"; harness.inputEl.fire("input"); await delay(270);
+    harness.inputEl.value = "new italy"; harness.inputEl.fire("input"); await delay(270);
+    resolvers[1]({ kind: "results", entries: [{ jurisdiction: "IT", canonicalInput: "normattiva:2005-05-16:005G0104", title: "New Italy" }] });
+    await settle();
+    resolvers[0]({ kind: "results", entries: [{ jurisdiction: "IT", canonicalInput: "normattiva:2005-05-16:005G0105", title: "Old Italy" }] });
+    await settle();
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    assert.equal(state.suggestionsEl.children[0]?.text, "New Italy");
+
+    state.suggestionsEl.children[0].fire("click");
+    harness.jurisdictionSelect.value = "ES"; harness.jurisdictionSelect.fire("change");
+    const selectedState = harness.modal as unknown as { selectedLaw: unknown; suggestionsEl: FakeElement };
+    assert.equal(selectedState.selectedLaw, null);
+    assert.equal(selectedState.suggestionsEl.children.some((child) => child.text.includes("Italy")), false);
+  });
+
+  it("ignores a late Italy discovery response after switching jurisdiction", async () => {
+    let resolveItaly!: (result: Awaited<ReturnType<LawDiscoveryProvider["search"]>>) => void;
+    const italyProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async () => new Promise((resolve) => { resolveItaly = resolve; }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", italyProvider]]));
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "italy";
+    harness.inputEl.fire("input");
+    await delay(270);
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(harness.jurisdictionSelect.value, "ES");
+
+    resolveItaly({ kind: "results", entries: [{ jurisdiction: "IT", canonicalInput: "normattiva:2005-05-16:005G0104", title: "Italy" }] });
+    await settle();
+
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: unknown };
+    assert.equal(state.suggestionsEl.children.some((child) => child.text.includes("Italy")), false);
+    assert.equal(state.selectedLaw, null);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("preserves the selected Italy identity when UI language changes and does not look up", async () => {
+    const lawCode = "normattiva:2005-05-16:005G0104";
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "IT", sourceLabel: "Normattiva",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "IT", canonicalInput: lawCode, title: "Italian law",
+        normattivaAct: { title: "Italian law", actType: "DECRETO", actDate: "2005-03-07", actNumber: 82, guDate: "2005-05-16" },
+      }] }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "IT";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "italy";
+    harness.inputEl.fire("input");
+    await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: { canonicalInput: string; jurisdiction: string } | null; ui: UiStrings; renderActions(): void };
+    state.suggestionsEl.children[0].fire("click");
+    const selectedIdentity = state.selectedLaw?.canonicalInput;
+    assert.equal(selectedIdentity, lawCode);
+
+    Object.assign(state.ui, getUiStrings("de"));
+    state.renderActions();
+    await settle();
+
+    assert.equal(state.selectedLaw?.canonicalInput, selectedIdentity);
+    assert.equal(state.selectedLaw?.jurisdiction, "IT");
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("renders Normattiva discovery failure states without a raw response", async () => {
+    for (const [outcome, status] of [
+      [{ kind: "no-results", entries: [] }, "no-results"],
+      [new Error("offline"), "unavailable"],
+      [new LawDiscoveryMalformedResponseError("bad response"), "malformed"],
+    ] as const) {
+      const discoveryProvider: LawDiscoveryProvider = {
+        jurisdiction: "IT", sourceLabel: "Normattiva",
+        search: async () => { if (outcome instanceof Error) throw outcome; return { ...outcome, entries: [...outcome.entries] }; },
+      };
+      const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]));
+      harness.jurisdictionSelect.value = "IT"; harness.jurisdictionSelect.fire("change");
+      harness.inputEl.value = "italy"; harness.inputEl.fire("input"); await delay(270); await settle();
+      const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+      assert.equal(state.suggestionsEl.children[0]?.getAttribute("data-discovery-status"), status);
+      assert.match(state.suggestionsEl.children[0]?.text ?? "", /Normattiva/);
+      harness.modal.onClose();
+    }
+  });
+
+  it("localizes Italy discovery statuses and loading labels", async () => {
+    const source = readFileSync(resolve(process.cwd(), "src/ui/LawLookupModal.ts"), "utf8");
+    assert.doesNotMatch(source, /no matching laws|discovery source unavailable|discovery response invalid|Loading law suggestions|Loading law text/u);
+
+    for (const [outcome, status] of [
+      [{ kind: "no-results", entries: [] }, "no-results"],
+      [new Error("offline"), "unavailable"],
+      [new LawDiscoveryMalformedResponseError("bad response"), "malformed"],
+    ] as const) {
+      const discoveryProvider: LawDiscoveryProvider = {
+        jurisdiction: "IT", sourceLabel: "Normattiva",
+        search: async () => { if (outcome instanceof Error) throw outcome; return { ...outcome, entries: [...outcome.entries] }; },
+      };
+      const harness = buildModalHarness(null, undefined, new Map([["IT", discoveryProvider]]), getUiStrings("de"));
+      harness.jurisdictionSelect.value = "IT";
+      harness.jurisdictionSelect.fire("change");
+      harness.inputEl.value = "italy";
+      harness.inputEl.fire("input");
+      await delay(270);
+      await settle();
+      const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+      assert.equal(state.suggestionsEl.children[0]?.getAttribute("data-discovery-status"), status);
+      assert.match(state.suggestionsEl.children[0]?.text ?? "", /Normattiva/);
+      assert.doesNotMatch(state.suggestionsEl.children[0]?.text ?? "", /no matching laws|discovery source unavailable|discovery response invalid/u);
       harness.modal.onClose();
     }
   });

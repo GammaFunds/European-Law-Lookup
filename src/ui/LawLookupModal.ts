@@ -1,13 +1,14 @@
 import { App, MarkdownView, Modal, Notice, Setting } from "obsidian";
 import { formatLawSectionAsMarkdown } from "../law/CitationFormatter";
-import { LawTranslationUnavailableError } from "../law/errors";
-import { ProviderRegistry } from "../law/ProviderRegistry";
+import { LawProviderUnavailableError, LawTranslationUnavailableError } from "../law/errors";
+import { LawSectionNotFoundError, ProviderRegistry } from "../law/ProviderRegistry";
 import type { LawJurisdiction, LawSection, LawSourceVariant } from "../law/types";
 import { EU_LANGUAGES } from "../law/euLanguages";
 import type { EuLawLanguage } from "../law/types";
 import { parseLawReferenceWithSelectedJurisdiction } from "../parser";
 import { LookupSequence } from "./LookupSequence";
 import { insertMarkdownIntoMarkdownView } from "./editorInsertion";
+import { getUiStrings } from "./i18n";
 import type { UiStrings } from "./i18n";
 import { buildLawSectionPreviewModel } from "./lawSectionPreview";
 import {
@@ -28,6 +29,7 @@ import type { FedlexLanguage } from "../law/providers/fedlexMapping";
 import { getSupportedFedlexLaws } from "../law/providers/fedlexMapping";
 import { getSupportedGesetzeImInternetLaws } from "../law/providers/gesetzeImInternetMapping";
 import { getSupportedRisLaws } from "../law/providers/risMapping";
+import { NormattivaSourceContractError } from "../law/providers/NormattivaLawProvider";
 import { EU_ACT_ALIASES, euActForLawCode } from "../law/euActRegistry";
 import {
   searchLawMetadata,
@@ -58,8 +60,15 @@ interface LawLookupModalSettingsStore {
 
 export type InputLayout = "single" | "split";
 
+function uiText(ui: UiStrings, key: keyof UiStrings): string {
+  const value = ui[key];
+  if (typeof value === "string" && value !== key) return value;
+  const fallback = getUiStrings("en")[key];
+  return typeof fallback === "string" ? fallback : "";
+}
+
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
 }
 
 export function normalizeInputLayout(value: unknown): InputLayout {
@@ -176,6 +185,7 @@ export class LawLookupModal extends Modal {
     jurisdictionSelect.createEl("option", { value: "CH", text: this.ui.jurisdictionSwitzerland });
     jurisdictionSelect.createEl("option", { value: "ES", text: this.ui.jurisdictionSpain });
     jurisdictionSelect.createEl("option", { value: "FI", text: this.ui.jurisdictionFinland ?? "Finland" });
+    jurisdictionSelect.createEl("option", { value: "IT", text: this.ui.jurisdictionItaly! });
     jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
       this.lookupSequence.next();
@@ -188,6 +198,8 @@ export class LawLookupModal extends Modal {
       if (this.inputLayout === "split") {
         this.lawInputEl.value = "";
         this.referenceInputEl.value = "";
+      } else {
+        this.inputEl.value = "";
       }
       this.renderSelectedLawStatus();
       this.renderResultMessage(this.ui.noLookupRunYet);
@@ -240,11 +252,11 @@ export class LawLookupModal extends Modal {
       if (!decomposed) return false;
       law = decomposed.law;
       reference = decomposed.reference;
-      if (this.selectedLaw?.canonicalInput !== law) this.selectedLaw = null;
+      if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) this.selectedLaw = null;
     } else {
       law = this.lawInputValue().trim();
       reference = this.referenceInputEl.value.trim();
-      if (this.selectedLaw?.canonicalInput !== law) this.selectedLaw = null;
+      if (this.selectedLaw && !this.inputStillHasSelectedLawPrefix()) this.selectedLaw = null;
     }
 
     const composed = nextLayout === "single" ? composeSplitLookupInput(law, reference) : "";
@@ -261,8 +273,11 @@ export class LawLookupModal extends Modal {
     this.suggestionsEl?.empty();
     const lookupId = this.lookupSequence.next();
     this.clearExplicitLookupLoading();
+    const visibleLookupInput = this.lookupInputValue();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
-      this.lookupInputValue(),
+      this.selectedJurisdiction === "IT" && this.selectedLaw
+        ? this.lookupInputWithSelectedItalyIdentity(visibleLookupInput)
+        : visibleLookupInput,
       this.selectedJurisdiction,
       this.indexProvider.getEuActIndex(),
     );
@@ -281,6 +296,8 @@ export class LawLookupModal extends Modal {
         ? { ...parsedReference, language: this.selectedChLanguage }
         : parsedReference.jurisdiction === "FI"
           ? { ...parsedReference, language: this.selectedFiLanguage === "fi" ? "fin" : "swe" }
+          : this.selectedJurisdiction === "IT"
+            ? { ...parsedReference, language: "it", normattivaAct: this.selectedLaw?.normattivaAct }
         : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
@@ -307,7 +324,13 @@ export class LawLookupModal extends Modal {
           ? this.ui.englishTranslationUnavailableForCitation
           : error instanceof EuActLanguageExpressionUnavailableError
             ? this.ui.euLanguageExpressionUnavailable
-              : this.ui.unexpectedLookupFailure,
+              : error instanceof LawSectionNotFoundError
+                ? this.ui.lawSectionNotFound
+                : error instanceof LawProviderUnavailableError
+                  ? this.ui.lawProviderUnavailable
+                  : error instanceof NormattivaSourceContractError
+                    ? this.ui.normattivaSourceUnverified
+                    : this.ui.unexpectedLookupFailure,
       );
     } finally {
       if (this.lookupSequence.isCurrent(lookupId)) {
@@ -321,7 +344,7 @@ export class LawLookupModal extends Modal {
     this.resultEl?.setAttribute?.("aria-busy", "true");
     this.explicitLookupLoadingEl = this.resultEl.createDiv({ cls: "de-law-lookup-loading" });
     this.explicitLookupLoadingEl?.setAttribute?.("role", "status");
-    this.explicitLookupLoadingEl?.setAttribute?.("aria-label", "Loading law text");
+    this.explicitLookupLoadingEl?.setAttribute?.("aria-label", uiText(this.ui, "loadingLawText"));
   }
 
   private clearExplicitLookupLoading(lookupId?: number): void {
@@ -428,7 +451,7 @@ export class LawLookupModal extends Modal {
     this.suggestionsEl.setAttribute("aria-busy", "true");
     this.discoveryLoadingEl = this.suggestionsEl.createDiv({ cls: "de-law-lookup-loading" });
     this.discoveryLoadingEl.setAttribute("role", "status");
-    this.discoveryLoadingEl.setAttribute("aria-label", "Loading law suggestions");
+    this.discoveryLoadingEl.setAttribute("aria-label", uiText(this.ui, "loadingLawSuggestions"));
   }
 
   private clearDiscoveryLoading(query: string, revision: number): void {
@@ -448,10 +471,11 @@ export class LawLookupModal extends Modal {
         text: this.metadataSuggestionLabel(suggestion),
       });
       button.addEventListener("click", () => {
+        const displayedLaw = suggestion.jurisdiction === "IT" ? suggestion.title : suggestion.canonicalInput;
         if (this.inputLayout === "split") {
-          this.lawInputEl.value = suggestion.canonicalInput;
+          this.lawInputEl.value = displayedLaw;
         } else {
-          this.inputEl.value = `${suggestion.canonicalInput} `;
+          this.inputEl.value = `${displayedLaw} `;
         }
         this.suggestionsEl.empty();
         this.selectedLaw = suggestion;
@@ -464,10 +488,10 @@ export class LawLookupModal extends Modal {
     this.suggestionsEl.empty();
     const sourceLabel = provider.sourceLabel;
     const message = status === "no-results"
-      ? `${sourceLabel}: no matching laws.`
+      ? uiText(this.ui, "discoveryNoResults").replace("{source}", sourceLabel)
       : status === "unavailable"
-        ? `${sourceLabel}: discovery source unavailable.`
-        : `${sourceLabel}: discovery response invalid.`;
+        ? uiText(this.ui, "discoveryUnavailable").replace("{source}", sourceLabel)
+        : uiText(this.ui, "discoveryMalformed").replace("{source}", sourceLabel);
     const statusEl = this.suggestionsEl.createDiv({
       cls: "de-law-lookup-discovery-status",
       text: message,
@@ -513,8 +537,17 @@ export class LawLookupModal extends Modal {
 
   private inputStillHasSelectedLawPrefix(): boolean {
     if (!this.selectedLaw) return false;
-    if (this.inputLayout === "split") return this.lawInputEl.value.trim() === this.selectedLaw.canonicalInput;
-    return this.inputEl.value.startsWith(`${this.selectedLaw.canonicalInput} `);
+    const displayedLaw = this.selectedLaw.jurisdiction === "IT" ? this.selectedLaw.title : this.selectedLaw.canonicalInput;
+    if (this.inputLayout === "split") return this.lawInputEl.value.trim() === displayedLaw.trim();
+    return this.inputEl.value.startsWith(`${displayedLaw} `);
+  }
+
+  private lookupInputWithSelectedItalyIdentity(input: string): string {
+    if (!this.selectedLaw) return input;
+    const decomposed = decomposeOneLineLookupInput(input, "IT");
+    return decomposed
+      ? composeSplitLookupInput(this.selectedLaw.canonicalInput, decomposed.reference)
+      : input;
   }
 
   private renderInputControls(law = "", reference = "", singleValue = ""): void {
@@ -655,6 +688,9 @@ export class LawLookupModal extends Modal {
 
   private metadataSuggestionLabel(suggestion: LawMetadataSuggestion): string {
     const matchedTitle = suggestion.matchedTitle ?? suggestion.title;
+    if (suggestion.jurisdiction === "IT" && suggestion.canonicalInput.startsWith("normattiva:")) {
+      return matchedTitle;
+    }
     if (suggestion.jurisdiction !== "EU") {
       return `${matchedTitle} (${suggestion.canonicalInput})`;
     }
@@ -801,6 +837,13 @@ export class LawLookupModal extends Modal {
           text: line,
         });
       }
+    }
+
+    if (this.currentSection.jurisdiction === "IT" && !this.currentSection.isAuthoritativeText) {
+      this.resultEl.createDiv({
+        cls: "de-law-source-status-notice",
+        text: this.ui.italyNonAuthoritativeNotice!,
+      });
     }
   }
 

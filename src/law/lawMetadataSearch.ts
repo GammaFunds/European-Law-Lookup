@@ -3,9 +3,9 @@ import {
   euDocumentTypeForHumanCitationActLabel,
   isRecognizedEuHumanCitationOrganizationCode,
 } from "./euHumanCitation";
-import type { EuDocumentType } from "./types";
+import type { EuDocumentType, NormattivaActMetadata } from "./types";
 
-export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI";
+export type LawMetadataJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI" | "IT";
 
 export type LawMetadataMatchKind =
   | "exact-alias"
@@ -23,6 +23,7 @@ export interface LawMetadataSearchEntry {
   celex?: string;
   year?: string;
   number?: string;
+  normattivaAct?: NormattivaActMetadata;
 }
 
 export interface LawMetadataSuggestion extends LawMetadataSearchEntry {

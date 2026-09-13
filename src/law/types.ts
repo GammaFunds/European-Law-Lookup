@@ -1,6 +1,6 @@
 export type LawReferenceType = "section" | "article";
 export type LawSourceVariant = "official-de" | "translation-en";
-export type LawJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI";
+export type LawJurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI" | "IT";
 export type EuDocumentType = "R" | "L" | "D";
 export type EuLawLanguage =
   | "bg" | "es" | "cs" | "da" | "de" | "et" | "el" | "en" | "fr" | "ga" | "hr" | "it"
@@ -17,6 +17,16 @@ export interface LawReference {
   sentence?: string;
   euCelex?: string;
   euDocumentType?: EuDocumentType;
+  normattivaAct?: NormattivaActMetadata;
+}
+
+export interface NormattivaActMetadata {
+  title: string;
+  actType: string;
+  actDate: string;
+  actNumber: number;
+  guDate: string;
+  guNumber?: number;
 }
 
 export interface LawSection {

@@ -15,6 +15,66 @@ function transportFor(responses: LawProviderHttpResponse[], urls: string[]): Law
 }
 
 describe("FinlexLawDiscovery", () => {
+  it("discovers a canonical statute identity through the deterministic AKN resource", async () => {
+    const urls: string[] = [];
+    const discovery = new FinlexLawDiscovery(async (url) => {
+      urls.push(url);
+      return response(200, XML);
+    });
+
+    const result = await discovery.search("729/2018");
+
+    assert.deepEqual(result, {
+      kind: "results",
+      entries: [{
+        jurisdiction: "FI", canonicalInput: "729/2018", title: "Tieliikennelaki",
+        sourceUrl: "https://opendata.finlex.fi/finlex/avoindata/v1/akn/fi/act/statute-consolidated/2018/729/fin@latest",
+        year: "2018", number: "729",
+      }],
+    });
+    assert.deepEqual(urls, ["https://opendata.finlex.fi/finlex/avoindata/v1/akn/fi/act/statute-consolidated/2018/729/fin@latest"]);
+  });
+
+  it("returns empty and never falls back to title search when a direct identity is missing", async () => {
+    const urls: string[] = [];
+    const discovery = new FinlexLawDiscovery(async (url) => {
+      urls.push(url);
+      return response(404, "");
+    });
+
+    assert.deepEqual(await discovery.search("729/2018"), { kind: "no-results", entries: [] });
+    assert.deepEqual(urls, ["https://opendata.finlex.fi/finlex/avoindata/v1/akn/fi/act/statute-consolidated/2018/729/fin@latest"]);
+  });
+
+  it("fails closed for malformed, mismatched, and unavailable direct identity responses", async () => {
+    const malformed = new FinlexLawDiscovery(async () => response(200, "<broken>"));
+    await assert.rejects(() => malformed.search("729/2018"), LawDiscoveryMalformedResponseError);
+
+    const mismatched = new FinlexLawDiscovery(async () => response(200, XML.replace("value=\"729\"", "value=\"730\"")));
+    await assert.rejects(() => mismatched.search("729/2018"), LawDiscoveryMalformedResponseError);
+
+    const unavailable = new FinlexLawDiscovery(async () => response(503, ""));
+    await assert.rejects(() => unavailable.search("729/2018"), LawDiscoveryUnavailableError);
+
+    const transportFailure = new FinlexLawDiscovery(async () => { throw new Error("offline"); });
+    await assert.rejects(() => transportFailure.search("729/2018"), LawDiscoveryUnavailableError);
+  });
+
+  it("does not route provider-invalid identities through the direct endpoint", async () => {
+    const invalid = ["0/2018", "729/0", "/2018", "729/", "2018/729", "729/2018/1", "72 9/2018", "+729/2018", "729.0/2018", "x729/2018"];
+    for (const input of invalid) {
+      const urls: string[] = [];
+      const discovery = new FinlexLawDiscovery(async (url) => {
+        urls.push(url);
+        return response(200, "[]", true);
+      });
+      assert.deepEqual(await discovery.search(input), { kind: "no-results", entries: [] });
+      assert.equal(urls.length, 1);
+      assert.match(urls[0], /\/statute-consolidated\/list\?/);
+      assert.doesNotMatch(urls[0], /\/statute-consolidated\/\d{4}\/\d+\/fin@latest$/);
+    }
+  });
+
   it("uses the official encoded title endpoint and verifies AKN identity", async () => {
     const urls: string[] = [];
     const discovery = new FinlexLawDiscovery(transportFor([

@@ -7,6 +7,7 @@ import {
   parseEuCelex,
 } from "./law/euActRegistry";
 import { resolveEuHumanCitation } from "./law/euHumanCitation";
+import { parseNormattivaLawCode } from "./law/providers/NormattivaLawProvider";
 
 export type ParsedLawReference = LawReference;
 
@@ -206,6 +207,9 @@ export function parseLawReferenceWithSelectedJurisdiction(
   selectedJurisdiction: LawJurisdiction,
   index?: EuActIndex | null,
 ): ParsedLawReference | null {
+  if (selectedJurisdiction === "IT") {
+    return parseNormattivaLawReference(input);
+  }
   if (selectedJurisdiction === "EU") {
     const normalized = input.trim().replace(/\s+/g, " ");
     const euCelexArticle = parseEuCelexArticle(normalized);
@@ -293,6 +297,20 @@ export function parseLawReferenceWithSelectedJurisdiction(
   }
 
   return null;
+}
+
+function parseNormattivaLawReference(input: string): ParsedLawReference | null {
+  const normalized = input.trim().replace(/\s+/gu, " ");
+  const article = String.raw`(?:Art\.?)\s*(\d+)`;
+  const lawCode = String.raw`(normattiva:\d{4}-\d{2}-\d{2}:[^\s:]+)`;
+  const lawFirst = new RegExp(String.raw`^${lawCode}\s+${article}$`, "u").exec(normalized);
+  const articleFirst = new RegExp(String.raw`^${article}\s+${lawCode}$`, "u").exec(normalized);
+  const match = lawFirst ?? articleFirst;
+  if (!match) return null;
+  const lawCodeValue = lawFirst ? match[1] : match[2];
+  const section = lawFirst ? match[2] : match[1];
+  if (!/^\d+$/u.test(section) || Number(section) <= 0 || !parseNormattivaLawCode(lawCodeValue)) return null;
+  return { lawCode: lawCodeValue, section, referenceType: "article", jurisdiction: "IT" };
 }
 
 function parseFinnishLawReference(input: string): ParsedLawReference | null {

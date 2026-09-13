@@ -1,4 +1,5 @@
 import { formatReferenceLabel } from "../law/referenceLabel";
+import { getLawSectionDisplayLabel } from "../law/CitationFormatter";
 import type { LawSection } from "../law/types";
 import { cellarLanguageNativeName } from "../law/euLanguages";
 import { localizedCacheStatus, type UiPresentationStrings } from "./i18n";
@@ -21,10 +22,11 @@ export function buildLawSectionPreviewModel(
   const heading = section.heading ? ` – ${section.heading}` : "";
   const includeMetadataFooter = options.includeMetadataFooter !== false;
   const referenceLabel = formatReferenceLabel(section);
-  const metadataLines = buildMetadataLines(section, referenceLabel, includeMetadataFooter, options.presentationStrings);
+  const lawLabel = getLawSectionDisplayLabel(section);
+  const metadataLines = buildMetadataLines(section, referenceLabel, lawLabel, includeMetadataFooter, options.presentationStrings);
 
   return {
-    title: `${referenceLabel} ${section.lawCode}${heading}`,
+    title: `${referenceLabel}${lawLabel ? ` ${lawLabel}` : ""}${heading}`,
     paragraphs: section.text.split("\n"),
     metadataLines,
   };
@@ -33,6 +35,7 @@ export function buildLawSectionPreviewModel(
 function buildMetadataLines(
   section: LawSection,
   referenceLabel: string,
+  lawLabel: string | undefined,
   includeMetadataFooter: boolean,
   strings?: Partial<Pick<UiPresentationStrings, "live" | "cached" | "stale" | "englishTextVariantNotice" | "austrianConsolidatedNotice" | "euOfficialLanguageNotice" | "celex" | "sourceMetadata" | "cacheMetadata">> & { finlandConsolidatedNotice?: string },
 ): string[] {
@@ -72,8 +75,14 @@ function buildMetadataLines(
   }
 
   if (includeMetadataFooter) {
+    const sourceMetadata = presentation.sourceMetadata
+      .replace(", {lawCode}", lawLabel ? `, ${lawLabel}` : "")
+      .replace("{lawCode}", lawLabel ?? "")
+      .replace("{provider}", section.providerLabel)
+      .replace("{reference}", referenceLabel)
+      .replace("{date}", section.retrievedAt.slice(0, 10));
     lines.push(
-      presentation.sourceMetadata.replace("{provider}", section.providerLabel).replace("{lawCode}", section.lawCode).replace("{reference}", referenceLabel).replace("{date}", section.retrievedAt.slice(0, 10)),
+      sourceMetadata,
       presentation.cacheMetadata.replace("{status}", localizedCacheStatus(section.cacheStatus, presentation)),
     );
   }

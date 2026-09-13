@@ -73,7 +73,7 @@ const bg = {
   sourceMetadata: "Източник: {provider}, {lawCode}, {reference}, извлечено на {date}.",
   cacheMetadata: "Кеш: {status}.",
   swissOfficialTextLanguage: "Официален език на швейцарския текст",
-  unexpectedLookupFailure: "Възникна неочаквана грешка при търсенето на закона. Опитайте отново.",
+  unexpectedLookupFailure: "Възникна неочаквана грешка при търсенето на закона. Опитайте отново.", lawSectionNotFound: "Исканият член не е намерен.", lawProviderUnavailable: "Източникът на правни данни временно не е достъпен.", normattivaSourceUnverified: "Отговорът на Normattiva не можа да бъде проверен.",
   refreshEuActIndex: "Обновяване на индекса на законодателството на ЕС",
 } satisfies UiStrings;
 
@@ -150,7 +150,7 @@ const cs = {
   sourceMetadata: "Zdroj: {provider}, {lawCode}, {reference}, získáno dne {date}.",
   cacheMetadata: "Mezipaměť: {status}.",
   swissOfficialTextLanguage: "Úřední jazyk švýcarského textu",
-  unexpectedLookupFailure: "Při vyhledávání zákona došlo k neočekávané chybě. Zkuste to znovu.",
+  unexpectedLookupFailure: "Při vyhledávání zákona došlo k neočekávané chybě. Zkuste to znovu.", lawSectionNotFound: "Požadovaný článek nebyl nalezen.", lawProviderUnavailable: "Zdroj právních údajů je dočasně nedostupný.", normattivaSourceUnverified: "Odpověď Normattiva se nepodařilo ověřit.",
   refreshEuActIndex: "Obnovit index právních předpisů EU",
 } satisfies UiStrings;
 
@@ -227,7 +227,7 @@ const da = {
   sourceMetadata: "Kilde: {provider}, {lawCode}, {reference}, hentet den {date}.",
   cacheMetadata: "Cache: {status}.",
   swissOfficialTextLanguage: "Schweizisk officielt tekstsprog",
-  unexpectedLookupFailure: "Der opstod en uventet fejl under opslag af loven. Prøv igen.",
+  unexpectedLookupFailure: "Der opstod en uventet fejl under opslag af loven. Prøv igen.", lawSectionNotFound: "Den ønskede artikel blev ikke fundet.", lawProviderUnavailable: "Juridikkilden er midlertidigt utilgængelig.", normattivaSourceUnverified: "Normattiva-svaret kunne ikke verificeres.",
   refreshEuActIndex: "Opdater EU-lovgivningsindeks",
 } satisfies UiStrings;
 
@@ -304,7 +304,7 @@ const de = {
   sourceMetadata: "Quelle: {provider}, {lawCode}, {reference}, abgerufen am {date}.",
   cacheMetadata: "Zwischenspeicher: {status}.",
   swissOfficialTextLanguage: "Amtliche Schweizer Sprachfassung",
-  unexpectedLookupFailure: "Die Gesetzesabfrage ist unerwartet fehlgeschlagen. Bitte versuchen Sie es erneut.",
+  unexpectedLookupFailure: "Die Gesetzesabfrage ist unerwartet fehlgeschlagen. Bitte versuchen Sie es erneut.", lawSectionNotFound: "Der angeforderte Artikel wurde nicht gefunden.", lawProviderUnavailable: "Die Rechtsdatenquelle ist vorübergehend nicht verfügbar.", normattivaSourceUnverified: "Die Normattiva-Antwort konnte nicht verifiziert werden.",
   refreshEuActIndex: "EU-Rechtsakt-Metadatenindex aktualisieren",
 } satisfies UiStrings;
 
@@ -381,7 +381,7 @@ const el = {
   sourceMetadata: "Πηγή: {provider}, {lawCode}, {reference}, λήψη στις {date}.",
   cacheMetadata: "Προσωρινή μνήμη: {status}.",
   swissOfficialTextLanguage: "Επίσημη γλώσσα ελβετικού κειμένου",
-  unexpectedLookupFailure: "Η αναζήτηση του νόμου απέτυχε απροσδόκητα. Δοκιμάστε ξανά.",
+  unexpectedLookupFailure: "Η αναζήτηση του νόμου απέτυχε απροσδόκητα. Δοκιμάστε ξανά.", lawSectionNotFound: "Το ζητούμενο άρθρο δεν βρέθηκε.", lawProviderUnavailable: "Η πηγή νομικών δεδομένων δεν είναι προσωρινά διαθέσιμη.", normattivaSourceUnverified: "Η απάντηση του Normattiva δεν ήταν δυνατό να επαληθευτεί.",
   refreshEuActIndex: "Ανανέωση ευρετηρίου νομοθεσίας της ΕΕ",
 } satisfies UiStrings;
 
@@ -458,7 +458,7 @@ const en = {
   sourceMetadata: "Source: {provider}, {lawCode}, {reference}, retrieved on {date}.",
   cacheMetadata: "Cache: {status}.",
   swissOfficialTextLanguage: "Swiss official text language",
-  unexpectedLookupFailure: "The law lookup failed unexpectedly. Please try again.",
+  unexpectedLookupFailure: "The law lookup failed unexpectedly. Please try again.", lawSectionNotFound: "The requested Article was not found.", lawProviderUnavailable: "The legal-data provider is temporarily unavailable.", normattivaSourceUnverified: "The Normattiva response could not be verified.",
   refreshEuActIndex: "Refresh the EU legislation metadata index",
 } satisfies UiStrings;
 
@@ -535,7 +535,7 @@ const es = {
   sourceMetadata: "Fuente: {provider}, {lawCode}, {reference}, obtenido el {date}.",
   cacheMetadata: "Caché: {status}.",
   swissOfficialTextLanguage: "Idioma oficial del texto suizo",
-  unexpectedLookupFailure: "La consulta de la ley falló inesperadamente. Inténtalo de nuevo.",
+  unexpectedLookupFailure: "La consulta de la ley falló inesperadamente. Inténtalo de nuevo.", lawSectionNotFound: "No se encontró el artículo solicitado.", lawProviderUnavailable: "La fuente de datos jurídicos no está disponible temporalmente.", normattivaSourceUnverified: "No se pudo verificar la respuesta de Normattiva.",
   refreshEuActIndex: "Actualizar el índice de legislación de la UE",
 } satisfies UiStrings;
 
@@ -612,7 +612,7 @@ const et = {
   sourceMetadata: "Allikas: {provider}, {lawCode}, {reference}, hangitud {date}.",
   cacheMetadata: "Vahemälu: {status}.",
   swissOfficialTextLanguage: "Šveitsi ametliku teksti keel",
-  unexpectedLookupFailure: "Seaduse otsimisel tekkis ootamatu tõrge. Proovi uuesti.",
+  unexpectedLookupFailure: "Seaduse otsimisel tekkis ootamatu tõrge. Proovi uuesti.", lawSectionNotFound: "Soovitud artiklit ei leitud.", lawProviderUnavailable: "Õigusandmete allikas pole ajutiselt kättesaadav.", normattivaSourceUnverified: "Normattiva vastust ei saanud kontrollida.",
   refreshEuActIndex: "Uuenda ELi õigusaktide registrit",
 } satisfies UiStrings;
 
@@ -689,7 +689,7 @@ const fi = {
   sourceMetadata: "Lähde: {provider}, {lawCode}, {reference}, haettu {date}.",
   cacheMetadata: "Välimuisti: {status}.",
   swissOfficialTextLanguage: "Sveitsin virallisen tekstin kieli",
-  unexpectedLookupFailure: "Lakia haettaessa tapahtui odottamaton virhe. Yritä uudelleen.",
+  unexpectedLookupFailure: "Lakia haettaessa tapahtui odottamaton virhe. Yritä uudelleen.", lawSectionNotFound: "Pyydettyä artiklaa ei löytynyt.", lawProviderUnavailable: "Oikeustietolähde ei ole tilapäisesti käytettävissä.", normattivaSourceUnverified: "Normattivan vastausta ei voitu varmentaa.",
   refreshEuActIndex: "Päivitä EU-lainsäädännön hakemisto",
 } satisfies UiStrings;
 
@@ -766,7 +766,7 @@ const fr = {
   sourceMetadata: "Source : {provider}, {lawCode}, {reference}, récupéré le {date}.",
   cacheMetadata: "Mise en cache : {status}.",
   swissOfficialTextLanguage: "Langue officielle du texte suisse",
-  unexpectedLookupFailure: "La recherche de la loi a échoué de manière inattendue. Veuillez réessayer.",
+  unexpectedLookupFailure: "La recherche de la loi a échoué de manière inattendue. Veuillez réessayer.", lawSectionNotFound: "L’article demandé est introuvable.", lawProviderUnavailable: "La source de données juridiques est temporairement indisponible.", normattivaSourceUnverified: "La réponse de Normattiva n’a pas pu être vérifiée.",
   refreshEuActIndex: "Actualiser l’index de la législation de l’UE",
 } satisfies UiStrings;
 
@@ -843,7 +843,7 @@ const ga = {
   sourceMetadata: "Foinse: {provider}, {lawCode}, {reference}, faighte an {date}.",
   cacheMetadata: "Taisce: {status}.",
   swissOfficialTextLanguage: "Teanga oifigiúil téacs na hEilvéise",
-  unexpectedLookupFailure: "Theip gan choinne ar chuardach an dlí. Bain triail eile as.",
+  unexpectedLookupFailure: "Theip gan choinne ar chuardach an dlí. Bain triail eile as.", lawSectionNotFound: "Níor aimsíodh an t-alt iarrtha.", lawProviderUnavailable: "Níl an fhoinse sonraí dlí ar fáil go sealadach.", normattivaSourceUnverified: "Níorbh fhéidir freagra Normattiva a fhíorú.",
   refreshEuActIndex: "Innéacs reachtaíocht AE a athnuachan",
 } satisfies UiStrings;
 
@@ -920,7 +920,7 @@ const hr = {
   sourceMetadata: "Izvor: {provider}, {lawCode}, {reference}, preuzeto {date}.",
   cacheMetadata: "Predmemorija: {status}.",
   swissOfficialTextLanguage: "Službeni jezik švicarskog teksta",
-  unexpectedLookupFailure: "Pretraživanje zakona neočekivano nije uspjelo. Pokušajte ponovno.",
+  unexpectedLookupFailure: "Pretraživanje zakona neočekivano nije uspjelo. Pokušajte ponovno.", lawSectionNotFound: "Traženi članak nije pronađen.", lawProviderUnavailable: "Izvor pravnih podataka privremeno nije dostupan.", normattivaSourceUnverified: "Odgovor Normattive nije moguće provjeriti.",
   refreshEuActIndex: "Osvježi indeks zakonodavstva EU-a",
 } satisfies UiStrings;
 
@@ -997,7 +997,7 @@ const hu = {
   sourceMetadata: "Forrás: {provider}, {lawCode}, {reference}, letöltve: {date}.",
   cacheMetadata: "Gyorsítótár: {status}.",
   swissOfficialTextLanguage: "A svájci hivatalos szöveg nyelve",
-  unexpectedLookupFailure: "A jogszabály keresése váratlanul meghiúsult. Próbálja újra.",
+  unexpectedLookupFailure: "A jogszabály keresése váratlanul meghiúsult. Próbálja újra.", lawSectionNotFound: "A kért cikkely nem található.", lawProviderUnavailable: "A jogi adatforrás átmenetileg nem érhető el.", normattivaSourceUnverified: "A Normattiva válasza nem ellenőrizhető.",
   refreshEuActIndex: "Az uniós jogszabályi index frissítése",
 } satisfies UiStrings;
 
@@ -1074,7 +1074,7 @@ const it = {
   sourceMetadata: "Fonte: {provider}, {lawCode}, {reference}, recuperato il {date}.",
   cacheMetadata: "Memoria cache: {status}.",
   swissOfficialTextLanguage: "Lingua ufficiale del testo svizzero",
-  unexpectedLookupFailure: "La ricerca della legge non è riuscita in modo imprevisto. Riprova.",
+  unexpectedLookupFailure: "La ricerca della legge non è riuscita in modo imprevisto. Riprova.", lawSectionNotFound: "L’articolo richiesto non è stato trovato.", lawProviderUnavailable: "La fonte dei dati giuridici non è temporaneamente disponibile.", normattivaSourceUnverified: "La risposta di Normattiva non ha potuto essere verificata.",
   refreshEuActIndex: "Aggiorna l’indice della legislazione UE",
 } satisfies UiStrings;
 
@@ -1151,7 +1151,7 @@ const lt = {
   sourceMetadata: "Šaltinis: {provider}, {lawCode}, {reference}, atsisiųsta {date}.",
   cacheMetadata: "Talpykla: {status}.",
   swissOfficialTextLanguage: "Šveicarijos oficialaus teksto kalba",
-  unexpectedLookupFailure: "Įstatymo paieška netikėtai nepavyko. Bandykite dar kartą.",
+  unexpectedLookupFailure: "Įstatymo paieška netikėtai nepavyko. Bandykite dar kartą.", lawSectionNotFound: "Prašomas straipsnis nerastas.", lawProviderUnavailable: "Teisinių duomenų šaltinis laikinai nepasiekiamas.", normattivaSourceUnverified: "Normattiva atsakymo nepavyko patikrinti.",
   refreshEuActIndex: "Atnaujinti ES teisės aktų indeksą",
 } satisfies UiStrings;
 
@@ -1228,7 +1228,7 @@ const lv = {
   sourceMetadata: "Avots: {provider}, {lawCode}, {reference}, iegūts {date}.",
   cacheMetadata: "Kešatmiņa: {status}.",
   swissOfficialTextLanguage: "Šveices oficiālā teksta valoda",
-  unexpectedLookupFailure: "Likuma meklēšanā radās neparedzēta kļūda. Lūdzu, mēģiniet vēlreiz.",
+  unexpectedLookupFailure: "Likuma meklēšanā radās neparedzēta kļūda. Lūdzu, mēģiniet vēlreiz.", lawSectionNotFound: "Pieprasītais pants nav atrasts.", lawProviderUnavailable: "Juridisko datu avots īslaicīgi nav pieejams.", normattivaSourceUnverified: "Normattiva atbildi neizdevās pārbaudīt.",
   refreshEuActIndex: "Atjaunināt ES tiesību aktu indeksu",
 } satisfies UiStrings;
 
@@ -1305,7 +1305,7 @@ const mt = {
   sourceMetadata: "Sors: {provider}, {lawCode}, {reference}, inkiseb fil-{date}.",
   cacheMetadata: "Cache lokali: {status}.",
   swissOfficialTextLanguage: "Lingwa uffiċjali tat-test Żvizzeru",
-  unexpectedLookupFailure: "It-tfittxija tal-liġi falliet b’mod mhux mistenni. Erġa’ pprova.",
+  unexpectedLookupFailure: "It-tfittxija tal-liġi falliet b’mod mhux mistenni. Erġa’ pprova.", lawSectionNotFound: "L-artikolu mitlub ma nstabx.", lawProviderUnavailable: "Is-sors tad-dejta legali bħalissa mhux disponibbli.", normattivaSourceUnverified: "Ir-rispons ta’ Normattiva ma setax jiġi vverifikat.",
   refreshEuActIndex: "Aġġorna l-indiċi tal-leġiżlazzjoni tal-UE",
 } satisfies UiStrings;
 
@@ -1382,7 +1382,7 @@ const nl = {
   sourceMetadata: "Bron: {provider}, {lawCode}, {reference}, opgehaald op {date}.",
   cacheMetadata: "Cache: {status}.",
   swissOfficialTextLanguage: "Officiële taal van de Zwitserse tekst",
-  unexpectedLookupFailure: "Het opzoeken van de wet is onverwacht mislukt. Probeer het opnieuw.",
+  unexpectedLookupFailure: "Het opzoeken van de wet is onverwacht mislukt. Probeer het opnieuw.", lawSectionNotFound: "Het gevraagde artikel is niet gevonden.", lawProviderUnavailable: "De bron voor juridische gegevens is tijdelijk niet beschikbaar.", normattivaSourceUnverified: "Het antwoord van Normattiva kon niet worden geverifieerd.",
   refreshEuActIndex: "EU-wetgevingsindex vernieuwen",
 } satisfies UiStrings;
 
@@ -1459,7 +1459,7 @@ const pl = {
   sourceMetadata: "Źródło: {provider}, {lawCode}, {reference}, pobrano dnia {date}.",
   cacheMetadata: "Pamięć podręczna: {status}.",
   swissOfficialTextLanguage: "Język urzędowego tekstu szwajcarskiego",
-  unexpectedLookupFailure: "Wyszukiwanie ustawy nieoczekiwanie się nie powiodło. Spróbuj ponownie.",
+  unexpectedLookupFailure: "Wyszukiwanie ustawy nieoczekiwanie się nie powiodło. Spróbuj ponownie.", lawSectionNotFound: "Nie znaleziono żądanego artykułu.", lawProviderUnavailable: "Źródło danych prawnych jest tymczasowo niedostępne.", normattivaSourceUnverified: "Nie można było zweryfikować odpowiedzi Normattiva.",
   refreshEuActIndex: "Odśwież indeks prawodawstwa UE",
 } satisfies UiStrings;
 
@@ -1536,7 +1536,7 @@ const pt = {
   sourceMetadata: "Fonte: {provider}, {lawCode}, {reference}, obtido em {date}.",
   cacheMetadata: "Estado da cache: {status}.",
   swissOfficialTextLanguage: "Idioma oficial do texto suíço",
-  unexpectedLookupFailure: "Ocorreu uma falha inesperada na consulta da lei. Tente novamente.",
+  unexpectedLookupFailure: "Ocorreu uma falha inesperada na consulta da lei. Tente novamente.", lawSectionNotFound: "O artigo solicitado não foi encontrado.", lawProviderUnavailable: "A fonte de dados jurídicos está temporariamente indisponível.", normattivaSourceUnverified: "Não foi possível verificar a resposta da Normattiva.",
   refreshEuActIndex: "Atualizar o índice da legislação da UE",
 } satisfies UiStrings;
 
@@ -1613,7 +1613,7 @@ const ro = {
   sourceMetadata: "Sursă: {provider}, {lawCode}, {reference}, preluat la {date}.",
   cacheMetadata: "Memorie cache: {status}.",
   swissOfficialTextLanguage: "Limba oficială a textului elvețian",
-  unexpectedLookupFailure: "Căutarea legii a eșuat în mod neașteptat. Încercați din nou.",
+  unexpectedLookupFailure: "Căutarea legii a eșuat în mod neașteptat. Încercați din nou.", lawSectionNotFound: "Articolul solicitat nu a fost găsit.", lawProviderUnavailable: "Sursa de date juridice este temporar indisponibilă.", normattivaSourceUnverified: "Răspunsul Normattiva nu a putut fi verificat.",
   refreshEuActIndex: "Reîmprospătează indexul legislației UE",
 } satisfies UiStrings;
 
@@ -1690,7 +1690,7 @@ const sk = {
   sourceMetadata: "Zdroj: {provider}, {lawCode}, {reference}, prevzaté {date}.",
   cacheMetadata: "Vyrovnávacia pamäť: {status}.",
   swissOfficialTextLanguage: "Úradný jazyk švajčiarskeho textu",
-  unexpectedLookupFailure: "Vyhľadávanie zákona neočakávane zlyhalo. Skúste to znova.",
+  unexpectedLookupFailure: "Vyhľadávanie zákona neočakávane zlyhalo. Skúste to znova.", lawSectionNotFound: "Požadovaný článok sa nenašiel.", lawProviderUnavailable: "Zdroj právnych údajov je dočasne nedostupný.", normattivaSourceUnverified: "Odpoveď Normattiva sa nepodarilo overiť.",
   refreshEuActIndex: "Obnoviť register právnych predpisov EÚ",
 } satisfies UiStrings;
 
@@ -1767,7 +1767,7 @@ const sl = {
   sourceMetadata: "Vir: {provider}, {lawCode}, {reference}, pridobljeno {date}.",
   cacheMetadata: "Predpomnilnik: {status}.",
   swissOfficialTextLanguage: "Jezik uradnega švicarskega besedila",
-  unexpectedLookupFailure: "Iskanje zakona je nepričakovano spodletelo. Poskusite znova.",
+  unexpectedLookupFailure: "Iskanje zakona je nepričakovano spodletelo. Poskusite znova.", lawSectionNotFound: "Zahtevani člen ni bil najden.", lawProviderUnavailable: "Vir pravnih podatkov trenutno ni na voljo.", normattivaSourceUnverified: "Odgovora Normattiva ni bilo mogoče preveriti.",
   refreshEuActIndex: "Osveži indeks zakonodaje EU",
 } satisfies UiStrings;
 
@@ -1844,7 +1844,7 @@ const sv = {
   sourceMetadata: "Källa: {provider}, {lawCode}, {reference}, hämtad den {date}.",
   cacheMetadata: "Cacheminne: {status}.",
   swissOfficialTextLanguage: "Officiellt språk för schweizisk text",
-  unexpectedLookupFailure: "Ett oväntat fel uppstod vid laguppslagningen. Försök igen.",
+  unexpectedLookupFailure: "Ett oväntat fel uppstod vid laguppslagningen. Försök igen.", lawSectionNotFound: "Den begärda artikeln hittades inte.", lawProviderUnavailable: "Rättsdatakällan är tillfälligt otillgänglig.", normattivaSourceUnverified: "Normattivas svar kunde inte verifieras.",
   refreshEuActIndex: "Uppdatera EU-lagstiftningsindexet",
 } satisfies UiStrings;
 
@@ -1884,4 +1884,40 @@ export const FINLAND_UI_STRINGS: Record<UiLanguage, {
   sk: { jurisdictionFinland: "Fínsko", defaultFiTextLanguage: "Jazyk fínskeho textu", defaultFiTextLanguageDescription: "Vyberte fínske alebo švédske znenie konsolidovaného textu Finlexu.", finlandAcceptedInputFormats: "Vstupné formáty Fínska", finlandInputExamples: "729/2018 § 1", finlandScopeNote: "Zákony sa vyhľadávajú naživo vo Finlexe; najprv vyberte zákon a potom zadajte odkaz na §. Podporované sú fínske a švédske znenia.", finlandConsolidatedNotice: "Konsolidovaný text Finlexu z oficiálneho zdroja; získané konsolidované znenie je označené ako neautorititatívne." },
   sl: { jurisdictionFinland: "Finska", defaultFiTextLanguage: "Jezik finskega besedila", defaultFiTextLanguageDescription: "Izberite finsko ali švedsko različico konsolidiranega besedila Finlex.", finlandAcceptedInputFormats: "Finski vnosni formati", finlandInputExamples: "729/2018 § 1", finlandScopeNote: "Zakoni se poiščejo v živo iz Finlexa; najprej izberite zakon, nato vnesite sklic §. Podprte so finske in švedske različice.", finlandConsolidatedNotice: "Konsolidirano besedilo Finlex iz uradnega vira; pridobljena konsolidirana različica je označena kot neavtoritativna." },
   sv: { jurisdictionFinland: "Finland", defaultFiTextLanguage: "Finskt textspråk", defaultFiTextLanguageDescription: "Välj den finska eller svenska versionen av Finlex konsoliderade text.", finlandAcceptedInputFormats: "Finska inmatningsformat", finlandInputExamples: "729/2018 § 1", finlandScopeNote: "Lagar upptäcks live från Finlex; välj en lag först och ange sedan en §-hänvisning. Finska och svenska versioner stöds.", finlandConsolidatedNotice: "Konsoliderad Finlex-text från en officiell källa; den hämtade konsoliderade versionen är markerad som icke-auktoritativ." },
+};
+
+export const ITALY_UI_STRINGS: Record<UiLanguage, {
+  jurisdictionItaly: string;
+  italySupportDescription: string;
+  italyNonAuthoritativeNotice: string;
+  loadingLawText: string;
+  loadingLawSuggestions: string;
+  discoveryNoResults: string;
+  discoveryUnavailable: string;
+  discoveryMalformed: string;
+}> = {
+  bg: { jurisdictionItaly: "Италия", italySupportDescription: "Италия се поддържа чрез Normattiva за членове на италиански език; v1 поддържа само обикновени членове с положителен десетичен номер. Специалните и bis форми и директното търсене на алинеи, подчленове, точки, букви, групи или приложения са отложени. Normattiva е официален публичен източник, но електронният текст на базата данни е информационен и неавтентичен; окончателната авторитетна официална публикация е Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva е официален публичен източник, но електронният текст е информационен и неавтентичен; окончателният официален текст е в Gazzetta Ufficiale.", loadingLawText: "Зареждане на текста на закона", loadingLawSuggestions: "Зареждане на предложенията за закони", discoveryNoResults: "{source}: няма съвпадащи закони.", discoveryUnavailable: "{source}: източникът за откриване е недостъпен.", discoveryMalformed: "{source}: отговорът при откриване е невалиден." },
+  cs: { jurisdictionItaly: "Itálie", italySupportDescription: "Itálie je podporována prostřednictvím Normattiva pro články v italštině; v1 podporuje pouze běžné články s kladným desetinným číslem. Zvláštní a bis formy a přímé vyhledávání odstavců, podčlánků, bodů, písmen, skupin nebo příloh jsou odloženy. Normattiva je oficiální veřejný zdroj, ale elektronický text databáze je informativní a neautentický; definitivní autoritativní oficiální publikací je Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva je oficiální veřejný zdroj, ale elektronický text je informativní a neautentický; definitivní oficiální text je v Gazzetta Ufficiale.", loadingLawText: "Načítání textu zákona", loadingLawSuggestions: "Načítání návrhů zákonů", discoveryNoResults: "{source}: nebyly nalezeny odpovídající zákony.", discoveryUnavailable: "{source}: zdroj vyhledávání není dostupný.", discoveryMalformed: "{source}: odpověď vyhledávání je neplatná." },
+  da: { jurisdictionItaly: "Italien", italySupportDescription: "Italien understøttes via Normattiva for artikler på italiensk; v1 understøtter kun almindelige artikler med positive decimaltal. Særlige og bis-former samt direkte opslag i afsnit, underartikler, punkter, bogstaver, grupper eller bilag er udskudt. Normattiva er en officiel offentlig kilde, men den elektroniske databasetekst er informativ og ikke-autentisk; den endelige autoritative officielle publikation er Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva er en officiel offentlig kilde, men den elektroniske tekst er informativ og ikke-autentisk; den endelige officielle tekst findes i Gazzetta Ufficiale.", loadingLawText: "Indlæser lovtekst", loadingLawSuggestions: "Indlæser lovforslag", discoveryNoResults: "{source}: ingen matchende love.", discoveryUnavailable: "{source}: kilden til søgning er utilgængelig.", discoveryMalformed: "{source}: søgeresvaret er ugyldigt." },
+  de: { jurisdictionItaly: "Italien", italySupportDescription: "Italien wird über Normattiva für Artikel auf Italienisch unterstützt; v1 unterstützt nur gewöhnliche Artikel mit positiver Dezimalzahl. Sonder- und bis-Formen sowie direkte Abfragen von Absätzen, Unterartikeln, Punkten, Buchstaben, Gruppen oder Anlagen sind zurückgestellt. Normattiva ist eine offizielle öffentliche Quelle, aber der elektronische Datenbanktext ist informativ und nicht authentisch; die endgültige maßgebliche amtliche Veröffentlichung ist die Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva ist eine offizielle öffentliche Quelle, aber der elektronische Text ist informativ und nicht authentisch; der endgültige amtliche Text steht in der Gazzetta Ufficiale.", loadingLawText: "Gesetzestext wird geladen", loadingLawSuggestions: "Gesetzesvorschläge werden geladen", discoveryNoResults: "{source}: keine passenden Gesetze gefunden.", discoveryUnavailable: "{source}: die Suchquelle ist nicht verfügbar.", discoveryMalformed: "{source}: die Suchantwort ist ungültig." },
+  el: { jurisdictionItaly: "Ιταλία", italySupportDescription: "Η Ιταλία υποστηρίζεται μέσω Normattiva για άρθρα στα ιταλικά· η v1 υποστηρίζει μόνο συνηθισμένα άρθρα με θετικό δεκαδικό αριθμό. Οι ειδικές και bis μορφές και η άμεση αναζήτηση παραγράφων, υποάρθρων, σημείων, γραμμάτων, ομάδων ή συνημμένων αναβάλλονται. Το Normattiva είναι επίσημη δημόσια πηγή, αλλά το ηλεκτρονικό κείμενο της βάσης δεδομένων είναι ενημερωτικό και μη αυθεντικό· η οριστική, αυθεντική επίσημη δημοσίευση είναι η Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Το Normattiva είναι επίσημη δημόσια πηγή, αλλά το ηλεκτρονικό κείμενο είναι ενημερωτικό και μη αυθεντικό· το οριστικό επίσημο κείμενο βρίσκεται στη Gazzetta Ufficiale.", loadingLawText: "Φόρτωση κειμένου νόμου", loadingLawSuggestions: "Φόρτωση προτάσεων νόμων", discoveryNoResults: "{source}: δεν βρέθηκαν νόμοι που να ταιριάζουν.", discoveryUnavailable: "{source}: η πηγή αναζήτησης δεν είναι διαθέσιμη.", discoveryMalformed: "{source}: η απόκριση αναζήτησης δεν είναι έγκυρη." },
+  en: { jurisdictionItaly: "Italy", italySupportDescription: "Italy is supported through Normattiva for Italian-language articles; v1 supports ordinary positive-decimal Articles only. Special/bis Article forms and comma-level direct lookup of commi, sub-articles, points, letters, groups, or attachments are deferred. Normattiva is an official public source, but its electronic database text is informational and non-authentic; the definitive authoritative official publication is the Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva is an official public source, but its electronic database text is informational and non-authentic; the definitive official text is the Gazzetta Ufficiale.", loadingLawText: "Loading law text", loadingLawSuggestions: "Loading law suggestions", discoveryNoResults: "{source}: no matching laws.", discoveryUnavailable: "{source}: discovery source unavailable.", discoveryMalformed: "{source}: discovery response invalid." },
+  es: { jurisdictionItaly: "Italia", italySupportDescription: "Italia está disponible mediante Normattiva para artículos en italiano; la v1 admite únicamente artículos ordinarios con decimal positivo. Las formas especiales/bis y la consulta directa de apartados, subartículos, puntos, letras, grupos o anexos quedan aplazadas. Normattiva es una fuente pública oficial, pero el texto electrónico de su base de datos es informativo y no auténtico; la publicación oficial definitiva y autorizada es la Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva es una fuente pública oficial, pero su texto electrónico es informativo y no auténtico; el texto oficial definitivo es el de la Gazzetta Ufficiale.", loadingLawText: "Cargando el texto de la ley", loadingLawSuggestions: "Cargando sugerencias de leyes", discoveryNoResults: "{source}: no se encontraron leyes coincidentes.", discoveryUnavailable: "{source}: la fuente de búsqueda no está disponible.", discoveryMalformed: "{source}: la respuesta de búsqueda no es válida." },
+  et: { jurisdictionItaly: "Itaalia", italySupportDescription: "Itaalia on Normattiva kaudu toetatud itaaliakeelsete artiklite jaoks; v1 toetab ainult tavalisi positiivse kümnendnumbriga artikleid. Eri- ja bis-vormid ning lõikude, alamartiklite, punktide, tähtede, rühmade või manuste otseotsing on edasi lükatud. Normattiva on ametlik avalik allikas, kuid andmebaasi elektrooniline tekst on teabeline ja mitteautentne; lõplik autoriteetne ametlik väljaanne on Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva on ametlik avalik allikas, kuid elektrooniline tekst on teabeline ja mitteautentne; lõplik ametlik tekst on Gazzetta Ufficiale'is.", loadingLawText: "Seaduse teksti laadimine", loadingLawSuggestions: "Seadusesoovituste laadimine", discoveryNoResults: "{source}: sobivaid seadusi ei leitud.", discoveryUnavailable: "{source}: otsinguallikas pole kättesaadav.", discoveryMalformed: "{source}: otsingu vastus on vigane." },
+  fi: { jurisdictionItaly: "Italia", italySupportDescription: "Italiaa tuetaan Normattivan kautta italiankielisille artikloille; v1 tukee vain tavallisia positiivisia desimaaliartikloja. Erityis- ja bis-muodot sekä kappaleiden, ala-artiklojen, kohtien, kirjainten, ryhmien tai liitteiden suorahaku on siirretty myöhemmäksi. Normattiva on virallinen julkinen lähde, mutta sen sähköinen tietokantateksti on tiedollinen eikä autenttinen; lopullinen auktoritatiivinen virallinen julkaisu on Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva on virallinen julkinen lähde, mutta sen sähköinen teksti on tiedollinen eikä autenttinen; lopullinen virallinen teksti on Gazzetta Ufficialessa.", loadingLawText: "Lain tekstin lataus", loadingLawSuggestions: "Lakiehdotusten lataus", discoveryNoResults: "{source}: sopivia lakeja ei löytynyt.", discoveryUnavailable: "{source}: hakulähde ei ole käytettävissä.", discoveryMalformed: "{source}: hakuvastaus ei kelpaa." },
+  fr: { jurisdictionItaly: "Italie", italySupportDescription: "L’Italie est prise en charge par Normattiva pour les articles en italien ; la v1 prend en charge uniquement les articles ordinaires à décimale positive. Les formes spéciales/bis et la recherche directe des alinéas, sous-articles, points, lettres, groupes ou annexes sont différées. Normattiva est une source publique officielle, mais le texte électronique de sa base de données est informatif et non authentique ; la publication officielle définitive et faisant autorité est la Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva est une source publique officielle, mais son texte électronique est informatif et non authentique ; le texte officiel définitif est celui de la Gazzetta Ufficiale.", loadingLawText: "Chargement du texte de loi", loadingLawSuggestions: "Chargement des suggestions de lois", discoveryNoResults: "{source} : aucune loi correspondante trouvée.", discoveryUnavailable: "{source} : la source de recherche est indisponible.", discoveryMalformed: "{source} : la réponse de recherche est invalide." },
+  ga: { jurisdictionItaly: "An Iodáil", italySupportDescription: "Tacaítear leis an Iodáil trí Normattiva le haghaidh altanna Iodáilise; tacaíonn v1 le gnáth-ailt le deachúil dhearfach amháin. Cuirtear foirmeacha speisialta/bis agus cuardach díreach ar mhíreanna, fo-ailt, pointí, litreacha, grúpaí nó ceangaltáin ar athló. Is foinse phoiblí oifigiúil é Normattiva, ach tá téacs leictreonach a bhunachair sonraí faisnéiseach agus neamhbharántúil; is é an foilseachán oifigiúil críochnaitheach údarásach an Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Is foinse phoiblí oifigiúil é Normattiva, ach tá a théacs leictreonach faisnéiseach agus neamhbharántúil; tá an téacs oifigiúil críochnaitheach sa Gazzetta Ufficiale.", loadingLawText: "Téacs an dlí á luchtú", loadingLawSuggestions: "Moltaí dlí á luchtú", discoveryNoResults: "{source}: níor aimsíodh aon dlíthe comhoiriúnacha.", discoveryUnavailable: "{source}: níl foinse an chuardaigh ar fáil.", discoveryMalformed: "{source}: tá freagra an chuardaigh neamhbhailí." },
+  hr: { jurisdictionItaly: "Italija", italySupportDescription: "Italija je podržana putem Normattive za članke na talijanskom; v1 podržava samo uobičajene članke s pozitivnim decimalnim brojem. Posebni i bis oblici te izravno pretraživanje stavaka, podčlanaka, točaka, slova, skupina ili priloga odgođeni su. Normattiva je službeni javni izvor, ali elektronički tekst baze podataka informativan je i neautentičan; konačna mjerodavna službena publikacija je Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva je službeni javni izvor, ali elektronički tekst je informativan i neautentičan; konačni službeni tekst nalazi se u Gazzetti Ufficiale.", loadingLawText: "Učitavanje teksta zakona", loadingLawSuggestions: "Učitavanje prijedloga zakona", discoveryNoResults: "{source}: nema pronađenih odgovarajućih zakona.", discoveryUnavailable: "{source}: izvor pretraživanja nije dostupan.", discoveryMalformed: "{source}: odgovor pretraživanja nije valjan." },
+  hu: { jurisdictionItaly: "Olaszország", italySupportDescription: "Olaszország a Normattiván keresztül támogatott az olasz nyelvű cikkekhez; a v1 csak a szokásos, pozitív tizedes számú cikkeket támogatja. A különleges és bis-formák, valamint a bekezdések, alcikkek, pontok, betűk, csoportok vagy mellékletek közvetlen keresése későbbre marad. A Normattiva hivatalos nyilvános forrás, de adatbázisának elektronikus szövege tájékoztató és nem hiteles; a végleges, irányadó hivatalos kiadvány a Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "A Normattiva hivatalos nyilvános forrás, de elektronikus szövege tájékoztató és nem hiteles; a végleges hivatalos szöveg a Gazzetta Ufficialében található.", loadingLawText: "Jogszabályszöveg betöltése", loadingLawSuggestions: "Jogszabály-javaslatok betöltése", discoveryNoResults: "{source}: nem találhatók egyező jogszabályok.", discoveryUnavailable: "{source}: a keresési forrás átmenetileg nem érhető el.", discoveryMalformed: "{source}: a keresési válasz érvénytelen." },
+  it: { jurisdictionItaly: "Italia", italySupportDescription: "L’Italia è supportata tramite Normattiva per gli articoli in italiano; la v1 supporta solo articoli ordinari con decimale positivo. Le forme speciali/bis e la ricerca diretta di commi, sottoarticoli, punti, lettere, gruppi o allegati sono rinviate. Normattiva è una fonte pubblica ufficiale, ma il testo elettronico della sua banca dati è informativo e non autentico; la pubblicazione ufficiale definitiva e autorevole è la Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva è una fonte pubblica ufficiale, ma il suo testo elettronico è informativo e non autentico; il testo ufficiale definitivo è quello della Gazzetta Ufficiale.", loadingLawText: "Caricamento del testo di legge", loadingLawSuggestions: "Caricamento dei suggerimenti di legge", discoveryNoResults: "{source}: nessuna legge corrispondente trovata.", discoveryUnavailable: "{source}: la fonte di ricerca non è disponibile.", discoveryMalformed: "{source}: la risposta di ricerca non è valida." },
+  lt: { jurisdictionItaly: "Italija", italySupportDescription: "Italija palaikoma per Normattiva italų kalbos straipsniams; v1 palaiko tik įprastus straipsnius su teigiamu dešimtainiu numeriu. Specialiosios ir bis formos bei tiesioginė pastraipų, poįstatyminių straipsnių, punktų, raidžių, grupių ar priedų paieška atidedamos. Normattiva yra oficialus viešas šaltinis, tačiau jos elektroninis duomenų bazės tekstas yra informacinis ir neautentiškas; galutinis autoritetingas oficialus leidinys yra Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva yra oficialus viešas šaltinis, tačiau elektroninis tekstas yra informacinis ir neautentiškas; galutinis oficialus tekstas yra Gazzetta Ufficiale.", loadingLawText: "Įstatymo teksto įkėlimas", loadingLawSuggestions: "Įstatymų pasiūlymų įkėlimas", discoveryNoResults: "{source}: atitinkančių įstatymų nerasta.", discoveryUnavailable: "{source}: paieškos šaltinis nepasiekiamas.", discoveryMalformed: "{source}: paieškos atsakymas negaliojantis." },
+  lv: { jurisdictionItaly: "Itālija", italySupportDescription: "Itālija tiek atbalstīta ar Normattiva itāļu valodas pantiem; v1 atbalsta tikai parastus pantus ar pozitīvu decimālu numuru. Īpašās un bis formas, kā arī tieša daļu, apakšpantu, punktu, burtu, grupu vai pielikumu meklēšana ir atlikta. Normattiva ir oficiāls publisks avots, taču tās elektroniskais datubāzes teksts ir informatīvs un neautentisks; galīgā autoritatīvā oficiālā publikācija ir Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva ir oficiāls publisks avots, taču elektroniskais teksts ir informatīvs un neautentisks; galīgais oficiālais teksts ir Gazzetta Ufficiale.", loadingLawText: "Likuma teksta ielāde", loadingLawSuggestions: "Likumu ieteikumu ielāde", discoveryNoResults: "{source}: atbilstoši likumi nav atrasti.", discoveryUnavailable: "{source}: meklēšanas avots nav pieejams.", discoveryMalformed: "{source}: meklēšanas atbilde nav derīga." },
+  mt: { jurisdictionItaly: "L-Italja", italySupportDescription: "L-Italja hija appoġġata permezz ta’ Normattiva għal artikoli bit-Taljan; il-v1 jappoġġa biss artikoli ordinarji b’numru deċimali pożittiv. Forom speċjali/bis u tfittxija diretta ta’ paragrafi, sottoartikoli, punti, ittri, gruppi jew annessi huma posposti. Normattiva huwa sors pubbliku uffiċjali, iżda t-test elettroniku tad-database tiegħu huwa informattiv u mhux awtentiku; il-pubblikazzjoni uffiċjali definittiva u awtorevoli hija l-Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva huwa sors pubbliku uffiċjali, iżda t-test elettroniku tiegħu huwa informattiv u mhux awtentiku; it-test uffiċjali definittiv jinsab fil-Gazzetta Ufficiale.", loadingLawText: "Qed jitgħabba t-test tal-liġi", loadingLawSuggestions: "Qed jitgħabbew suġġerimenti tal-liġijiet", discoveryNoResults: "{source}: ma nstabux liġijiet li jaqblu.", discoveryUnavailable: "{source}: is-sors tat-tfittxija mhuwiex disponibbli.", discoveryMalformed: "{source}: it-tweġiba tat-tfittxija mhijiex valida." },
+  nl: { jurisdictionItaly: "Italië", italySupportDescription: "Italië wordt via Normattiva ondersteund voor Italiaanstalige artikelen; v1 ondersteunt alleen gewone artikelen met een positief decimaal nummer. Speciale en bis-vormen en rechtstreeks zoeken in leden, subartikelen, punten, letters, groepen of bijlagen zijn uitgesteld. Normattiva is een officiële openbare bron, maar de elektronische databasetekst is informatief en niet-authentiek; de definitieve gezaghebbende officiële publicatie is de Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva is een officiële openbare bron, maar de elektronische tekst is informatief en niet-authentiek; de definitieve officiële tekst staat in de Gazzetta Ufficiale.", loadingLawText: "Wettekst laden", loadingLawSuggestions: "Wetsuggesties laden", discoveryNoResults: "{source}: geen overeenkomende wetten gevonden.", discoveryUnavailable: "{source}: de zoekbron is niet beschikbaar.", discoveryMalformed: "{source}: het zoekantwoord is ongeldig." },
+  pl: { jurisdictionItaly: "Włochy", italySupportDescription: "Włochy są obsługiwane przez Normattiva dla artykułów w języku włoskim; wersja v1 obsługuje wyłącznie zwykłe artykuły z dodatnią liczbą dziesiętną. Formy specjalne/bis oraz bezpośrednie wyszukiwanie ustępów, podartykułów, punktów, liter, grup lub załączników są odroczone. Normattiva jest oficjalnym źródłem publicznym, ale elektroniczny tekst bazy danych ma charakter informacyjny i nieautentyczny; ostateczną autorytatywną publikacją urzędową jest Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva jest oficjalnym źródłem publicznym, ale tekst elektroniczny ma charakter informacyjny i nieautentyczny; ostateczny tekst urzędowy znajduje się w Gazzetta Ufficiale.", loadingLawText: "Ładowanie tekstu ustawy", loadingLawSuggestions: "Ładowanie propozycji ustaw", discoveryNoResults: "{source}: nie znaleziono pasujących ustaw.", discoveryUnavailable: "{source}: źródło wyszukiwania jest niedostępne.", discoveryMalformed: "{source}: odpowiedź wyszukiwania jest nieprawidłowa." },
+  pt: { jurisdictionItaly: "Itália", italySupportDescription: "A Itália é suportada através da Normattiva para artigos em italiano; a v1 suporta apenas artigos comuns com número decimal positivo. As formas especiais/bis e a pesquisa direta de parágrafos, subartigos, pontos, letras, grupos ou anexos ficam adiadas. A Normattiva é uma fonte pública oficial, mas o texto eletrónico da sua base de dados é informativo e não autêntico; a publicação oficial definitiva e autorizada é a Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "A Normattiva é uma fonte pública oficial, mas o seu texto eletrónico é informativo e não autêntico; o texto oficial definitivo é o da Gazzetta Ufficiale.", loadingLawText: "A carregar o texto da lei", loadingLawSuggestions: "A carregar sugestões de leis", discoveryNoResults: "{source}: não foram encontradas leis correspondentes.", discoveryUnavailable: "{source}: a fonte de pesquisa não está disponível.", discoveryMalformed: "{source}: a resposta da pesquisa é inválida." },
+  ro: { jurisdictionItaly: "Italia", italySupportDescription: "Italia este acceptată prin Normattiva pentru articole în italiană; v1 acceptă numai articole obișnuite cu număr zecimal pozitiv. Formele speciale/bis și căutarea directă a alineatelor, subarticolelor, punctelor, literelor, grupurilor sau anexelor sunt amânate. Normattiva este o sursă publică oficială, dar textul electronic al bazei sale de date este informativ și neautentic; publicația oficială definitivă și autoritară este Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva este o sursă publică oficială, dar textul electronic este informativ și neautentic; textul oficial definitiv este cel din Gazzetta Ufficiale.", loadingLawText: "Se încarcă textul legii", loadingLawSuggestions: "Se încarcă sugestiile de legi", discoveryNoResults: "{source}: nu au fost găsite legi corespunzătoare.", discoveryUnavailable: "{source}: sursa de căutare nu este disponibilă.", discoveryMalformed: "{source}: răspunsul căutării nu este valid." },
+  sk: { jurisdictionItaly: "Taliansko", italySupportDescription: "Taliansko je podporované prostredníctvom Normattiva pre články v taliančine; v1 podporuje iba bežné články s kladným desatinným číslom. Osobitné a bis formy a priame vyhľadávanie odsekov, podčlánkov, bodov, písmen, skupín alebo príloh sú odložené. Normattiva je oficiálny verejný zdroj, ale elektronický text databázy je informatívny a neautentický; definitívnou autoritatívnou oficiálnou publikáciou je Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva je oficiálny verejný zdroj, ale elektronický text je informatívny a neautentický; definitívny oficiálny text je v Gazzetta Ufficiale.", loadingLawText: "Načítava sa text zákona", loadingLawSuggestions: "Načítavajú sa návrhy zákonov", discoveryNoResults: "{source}: nenašli sa žiadne zodpovedajúce zákony.", discoveryUnavailable: "{source}: zdroj vyhľadávania nie je dostupný.", discoveryMalformed: "{source}: odpoveď vyhľadávania je neplatná." },
+  sl: { jurisdictionItaly: "Italija", italySupportDescription: "Italija je podprta prek Normattive za članke v italijanščini; v1 podpira samo običajne članke s pozitivnim decimalnim številom. Posebne in bis-oblike ter neposredno iskanje odstavkov, podčlenov, točk, črk, skupin ali prilog so odloženi. Normattiva je uradni javni vir, vendar je elektronsko besedilo podatkovne zbirke informativno in neavtentično; dokončna avtoritativna uradna objava je Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva je uradni javni vir, vendar je elektronsko besedilo informativno in neavtentično; dokončno uradno besedilo je v Gazzetta Ufficiale.", loadingLawText: "Nalaganje besedila zakona", loadingLawSuggestions: "Nalaganje predlogov zakonov", discoveryNoResults: "{source}: ustrezni zakoni niso bili najdeni.", discoveryUnavailable: "{source}: vir iskanja ni na voljo.", discoveryMalformed: "{source}: odgovor iskanja ni veljaven." },
+  sv: { jurisdictionItaly: "Italien", italySupportDescription: "Italien stöds via Normattiva för artiklar på italienska; v1 stöder endast vanliga artiklar med positivt decimaltal. Särskilda och bis-former samt direktsökning efter stycken, underartiklar, punkter, bokstäver, grupper eller bilagor skjuts upp. Normattiva är en officiell offentlig källa, men den elektroniska databastexten är informativ och icke-autentisk; den slutliga auktoritativa officiella publikationen är Gazzetta Ufficiale.", italyNonAuthoritativeNotice: "Normattiva är en officiell offentlig källa, men den elektroniska texten är informativ och icke-autentisk; den slutliga officiella texten finns i Gazzetta Ufficiale.", loadingLawText: "Laddar lagtext", loadingLawSuggestions: "Laddar lagförslag", discoveryNoResults: "{source}: inga matchande lagar hittades.", discoveryUnavailable: "{source}: sökkällan är inte tillgänglig.", discoveryMalformed: "{source}: söksvaret är ogiltigt." },
 };

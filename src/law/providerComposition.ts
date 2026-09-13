@@ -12,6 +12,7 @@ import { RisLawProvider } from "./providers/RisLawProvider";
 import { EurLexLawProvider } from "./providers/EurLexLawProvider";
 import { BoeLawProvider } from "./providers/BoeLawProvider";
 import { FinlexLawProvider } from "./providers/FinlexLawProvider";
+import { NormattivaLawProvider } from "./providers/NormattivaLawProvider";
 import type { EuActLanguageAuthorizer } from "./providers/eurLexMapping";
 import type { LawReference } from "./types";
 
@@ -22,6 +23,7 @@ const PROVIDER_IDS_BY_JURISDICTION = {
   CH: ["fedlex"],
   ES: ["boe"],
   FI: ["finlex"],
+  IT: ["normattiva"],
 } as const;
 
 export function providersForReference(providers: readonly LawProvider[], reference: LawReference): LawProvider[] {
@@ -45,6 +47,9 @@ export function buildLawProviders(options: ProviderCompositionOptions = {}): Law
   const fedlexTransport = options.requestUrl
     ? createObsidianRequestUrlPostTransport(options.requestUrl)
     : createMissingPostTransport();
+  const normattivaTransport = options.requestUrl
+    ? createObsidianRequestUrlPostTransport(options.requestUrl)
+    : createMissingPostTransport();
 
   const providers: LawProvider[] = [
     new EurLexLawProvider(httpTransport, options.euActLanguageAuthorizer),
@@ -54,6 +59,7 @@ export function buildLawProviders(options: ProviderCompositionOptions = {}): Law
     new RisLawProvider(undefined, httpTransport),
     new BoeLawProvider(undefined, httpTransport),
     new FinlexLawProvider(undefined, httpTransport),
+    new NormattivaLawProvider(undefined, normattivaTransport),
   ];
 
   if (options.enableMockLawProvider === true) {

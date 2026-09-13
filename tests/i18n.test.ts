@@ -29,10 +29,12 @@ const REQUIRED_UI_STRING_KEYS = [
   "structuredArticleFirst", "structuredActFirst", "knownAlias", "exactOfficialTitle", "euDirectCelexExamples",
   "euStructuredCitationExample", "euActFirstExample", "euAliasExamples", "euExactTitleExample", "euScopeNote", "source",
   "retrievedOn", "cache", "live", "cached", "stale", "englishTextVariantNotice", "austrianConsolidatedNotice",
-  "euOfficialLanguageNotice", "celex", "sourceMetadata", "cacheMetadata", "swissOfficialTextLanguage", "unexpectedLookupFailure",
+  "euOfficialLanguageNotice", "celex", "sourceMetadata", "cacheMetadata", "swissOfficialTextLanguage", "unexpectedLookupFailure", "lawSectionNotFound", "lawProviderUnavailable", "normattivaSourceUnverified",
   "refreshEuActIndex",
   "spainAcceptedInputFormats", "spainInputExamples", "spainScopeNote",
   "jurisdictionFinland", "defaultFiTextLanguage", "defaultFiTextLanguageDescription", "finlandAcceptedInputFormats", "finlandInputExamples", "finlandScopeNote", "finlandConsolidatedNotice",
+  "jurisdictionItaly", "italySupportDescription", "italyNonAuthoritativeNotice",
+  "loadingLawText", "loadingLawSuggestions", "discoveryNoResults", "discoveryUnavailable", "discoveryMalformed",
 ] as const;
 
 // Every identical value is authorized by locale and exact key; no key has a global exemption.
@@ -155,6 +157,31 @@ describe("ui i18n", () => {
       assert.equal(typeof template, "string", `${code} selected-law guidance`);
       assert.match(template, /\{law\}/u, `${code} selected-law guidance law placeholder`);
       assert.match(template, /\{reference\}/u, `${code} selected-law guidance reference placeholder`);
+    }
+  });
+
+  it("keeps every Italy support locale semantically complete and localized", () => {
+    const english = getUiStrings("en").italySupportDescription;
+    const englishFragments = [
+      "Italy is supported through",
+      "v1 supports ordinary positive-decimal Articles only",
+      "Special/bis Article forms",
+      "Normattiva is an official public source",
+      "electronic database text is informational and non-authentic",
+      "definitive authoritative official publication",
+    ];
+    for (const code of UI_LANGUAGE_CODES) {
+      const strings = getUiStrings(code);
+      const support = (strings as unknown as Record<string, string>).italySupportDescription;
+      assert.equal(typeof support, "string", `${code} Italy support`);
+      assert.match(support, /Normattiva/u, `${code} Normattiva`);
+      assert.match(support, /Gazzetta Ufficiale/u, `${code} Gazzetta Ufficiale`);
+      assert.match(support, /\S/u, `${code} Italy support`);
+      if (code === "en") continue;
+      assert.notEqual(support, english, `${code} translated Italy support`);
+      for (const fragment of englishFragments) {
+        assert.doesNotMatch(support, new RegExp(fragment, "u"), `${code} contains English fragment ${fragment}`);
+      }
     }
   });
 

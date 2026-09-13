@@ -5,6 +5,38 @@ import { getUiStrings } from "../src/ui/i18n";
 import type { LawSection } from "../src/law/types";
 
 describe("lawSectionPreview", () => {
+  it("uses the source-backed Italy law title instead of its canonical identity", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "normattiva",
+      providerLabel: "Normattiva",
+      lawCode: "normattiva:2005-05-16:005G0104",
+      lawTitle: "DECRETO LEGISLATIVO 7 marzo 2005, n. 82",
+      section: "20",
+      referenceType: "article",
+      jurisdiction: "IT",
+      text: "Meaningful Article 20 body.",
+      retrievedAt: "2026-09-13T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: true,
+    });
+
+    assert.match(preview.title, /Art\. 20/);
+    assert.match(preview.title, /DECRETO LEGISLATIVO 7 marzo 2005, n\. 82/);
+    assert.doesNotMatch(preview.title, /normattiva:/);
+  });
+
+  it("fails closed when an Italy source-backed law title is absent", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "normattiva", providerLabel: "Normattiva", lawCode: "normattiva:2005-05-16:005G0104", lawTitle: "",
+      section: "20", referenceType: "article", jurisdiction: "IT", text: "Article body.",
+      retrievedAt: "2026-09-13T12:00:00.000Z", cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: true,
+    });
+
+    assert.equal(preview.title, "Art. 20");
+    assert.equal(preview.metadataLines.some((line) => line.includes("normattiva:")), false);
+  });
+
   it("shows the non-authoritative consolidated Finlex notice only for FI", () => {
     const strings = getUiStrings("en");
     const fi = buildLawSectionPreviewModel({

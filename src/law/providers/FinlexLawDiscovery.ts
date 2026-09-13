@@ -15,6 +15,8 @@ export class FinlexLawDiscovery implements LawDiscoveryProvider {
   async search(query: string): Promise<LawDiscoveryResult> {
     const normalized = query.trim();
     if (normalized.length < 2) return { kind: "no-results", entries: [] };
+    const directIdentity = parseDirectLawCode(normalized);
+    if (directIdentity) return this.searchDirectIdentity(directIdentity.year, directIdentity.number);
     const url = `${this.baseUrl}/akn/fi/act/statute-consolidated/list?format=json&page=1&limit=8&langAndVersion=fin%40latest&titleContains=${encodeURIComponent(normalized)}&isInForce=true`;
     const listResponse = await this.request(url, "application/json");
     if (listResponse.status === 404) return { kind: "no-results", entries: [] };
@@ -39,6 +41,21 @@ export class FinlexLawDiscovery implements LawDiscoveryProvider {
     return entries.length === 0 ? { kind: "no-results", entries: [] } : { kind: "results", entries };
   }
 
+  private async searchDirectIdentity(year: string, number: string): Promise<LawDiscoveryResult> {
+    const sourceUrl = `${this.baseUrl}/akn/fi/act/statute-consolidated/${year}/${number}/fin@latest`;
+    const response = await this.request(sourceUrl, "application/xml");
+    if (response.status === 404) return { kind: "no-results", entries: [] };
+    if (!response.ok) throw new LawDiscoveryUnavailableError(`Finlex metadata request failed: ${sourceUrl}`);
+    let xml: string;
+    try { xml = await response.text(); } catch { throw new LawDiscoveryMalformedResponseError("Finlex metadata XML was unreadable"); }
+    let document;
+    try { document = parseFinlexAkn(xml, year, number, "fin"); } catch { throw new LawDiscoveryMalformedResponseError("Finlex metadata identity was malformed"); }
+    return {
+      kind: "results",
+      entries: [{ jurisdiction: "FI", canonicalInput: `${document.number}/${document.year}`, title: document.title, sourceUrl, year: document.year, number: document.number } as LawMetadataSearchEntry],
+    };
+  }
+
   private async request(url: string, accept: string) {
     try { return await this.fetchFn(url, { headers: { Accept: accept, "User-Agent": USER_AGENT } }); }
     catch { throw new LawDiscoveryUnavailableError(`Finlex request failed: ${url}`); }
@@ -46,3 +63,8 @@ export class FinlexLawDiscovery implements LawDiscoveryProvider {
 }
 
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"); }
+
+function parseDirectLawCode(value: string): { year: string; number: string } | null {
+  const match = /^([1-9]\d{0,5})\/((?!0000)\d{4})$/u.exec(value);
+  return match ? { number: match[1], year: match[2] } : null;
+}
