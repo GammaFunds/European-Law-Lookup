@@ -207,6 +207,7 @@ export function parseLawReferenceWithSelectedJurisdiction(
   selectedJurisdiction: LawJurisdiction,
   index?: EuActIndex | null,
 ): ParsedLawReference | null {
+  if (selectedJurisdiction === "NL") return parseBwbLawReference(input);
   if (selectedJurisdiction === "IT") {
     return parseNormattivaLawReference(input);
   }
@@ -297,6 +298,19 @@ export function parseLawReferenceWithSelectedJurisdiction(
   }
 
   return null;
+}
+
+function parseBwbLawReference(input: string): ParsedLawReference | null {
+  const normalized = input.trim().replace(/\s+/gu, " ");
+  const lawCode = String.raw`(BWBR\d{7})`;
+  const article = String.raw`(?:Art\.?|Artikel)\s*(\d+(?:[:.]\d+|[A-Za-z])?)`;
+  const lawFirst = new RegExp(String.raw`^${lawCode}\s+${article}$`, "iu").exec(normalized);
+  const articleFirst = new RegExp(String.raw`^${article}\s+${lawCode}$`, "iu").exec(normalized);
+  const match = lawFirst ?? articleFirst;
+  if (!match) return null;
+  const code = lawFirst ? match[1] : match[2];
+  const section = lawFirst ? match[2] : match[1];
+  return { lawCode: code.toUpperCase(), section, referenceType: "article", jurisdiction: "NL" };
 }
 
 function parseNormattivaLawReference(input: string): ParsedLawReference | null {
