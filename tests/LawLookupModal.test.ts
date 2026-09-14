@@ -416,6 +416,24 @@ function resultMessageText(harness: ModalHarness): string {
   return resultEl.children.map((child) => child.text).join(" ");
 }
 
+function jurisdictionOptionValues(harness: ModalHarness): string[] {
+  return harness.jurisdictionSelect.children.map((option) => option.value);
+}
+
+describe("LawLookupModal jurisdiction selector presentation order", () => {
+  it("pins EU first and sorts the remaining visible English labels", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+
+    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "AT", "FI", "DE", "IT", "ES", "CH"]);
+  });
+
+  it("reorders non-EU entries when the active UI language changes to German", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("de"));
+
+    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "DE", "FI", "IT", "AT", "CH", "ES"]);
+  });
+});
+
 describe("LawLookupModal EU requested language preservation", () => {
   it("exposes Finland in the jurisdiction selector", () => {
     const harness = buildModalHarness(null);

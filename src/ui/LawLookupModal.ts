@@ -8,7 +8,7 @@ import type { EuLawLanguage } from "../law/types";
 import { parseLawReferenceWithSelectedJurisdiction } from "../parser";
 import { LookupSequence } from "./LookupSequence";
 import { insertMarkdownIntoMarkdownView } from "./editorInsertion";
-import { getUiStrings } from "./i18n";
+import { getUiStrings, UI_LANGUAGE_CODES } from "./i18n";
 import type { UiStrings } from "./i18n";
 import { buildLawSectionPreviewModel } from "./lawSectionPreview";
 import {
@@ -69,6 +69,24 @@ function uiText(ui: UiStrings, key: keyof UiStrings): string {
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
   return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
+}
+
+const JURISDICTION_LABEL_KEYS = [
+  "jurisdictionGermany",
+  "jurisdictionAustria",
+  "jurisdictionSwitzerland",
+  "jurisdictionSpain",
+  "jurisdictionFinland",
+  "jurisdictionItaly",
+  "jurisdictionEuropeanUnion",
+] as const;
+
+function uiLocaleForStrings(ui: UiStrings): string {
+  for (const language of UI_LANGUAGE_CODES) {
+    const localized = getUiStrings(language);
+    if (JURISDICTION_LABEL_KEYS.every((key) => localized[key] === ui[key])) return language;
+  }
+  return "en";
 }
 
 export function normalizeInputLayout(value: unknown): InputLayout {
@@ -170,22 +188,26 @@ export class LawLookupModal extends Modal {
       cls: "de-law-jurisdiction-select",
     });
     this.jurisdictionSelectEl = jurisdictionSelect;
-    jurisdictionSelect.createEl("option", {
-      value: "EU",
-      text: this.ui.jurisdictionEuropeanUnion,
-    });
-    jurisdictionSelect.createEl("option", {
-      value: "DE",
-      text: this.ui.jurisdictionGermany,
-    });
-    jurisdictionSelect.createEl("option", {
-      value: "AT",
-      text: this.ui.jurisdictionAustria,
-    });
-    jurisdictionSelect.createEl("option", { value: "CH", text: this.ui.jurisdictionSwitzerland });
-    jurisdictionSelect.createEl("option", { value: "ES", text: this.ui.jurisdictionSpain });
-    jurisdictionSelect.createEl("option", { value: "FI", text: this.ui.jurisdictionFinland ?? "Finland" });
-    jurisdictionSelect.createEl("option", { value: "IT", text: this.ui.jurisdictionItaly! });
+    const jurisdictionOptions: Array<{ code: LawJurisdiction; label: string }> = [
+      { code: "EU", label: this.ui.jurisdictionEuropeanUnion },
+      { code: "DE", label: this.ui.jurisdictionGermany },
+      { code: "AT", label: this.ui.jurisdictionAustria },
+      { code: "CH", label: this.ui.jurisdictionSwitzerland },
+      { code: "ES", label: this.ui.jurisdictionSpain },
+      { code: "FI", label: this.ui.jurisdictionFinland ?? "Finland" },
+      { code: "IT", label: this.ui.jurisdictionItaly! },
+    ];
+    const euOption = jurisdictionOptions.find((option) => option.code === "EU")!;
+    const collator = new Intl.Collator(uiLocaleForStrings(this.ui), { sensitivity: "base" });
+    const orderedJurisdictionOptions = [
+      euOption,
+      ...jurisdictionOptions
+        .filter((option) => option.code !== "EU")
+        .sort((left, right) => collator.compare(left.label, right.label) || left.code.localeCompare(right.code)),
+    ];
+    for (const option of orderedJurisdictionOptions) {
+      jurisdictionSelect.createEl("option", { value: option.code, text: option.label });
+    }
     jurisdictionSelect.value = this.selectedJurisdiction;
     jurisdictionSelect.addEventListener("change", () => {
       this.lookupSequence.next();
