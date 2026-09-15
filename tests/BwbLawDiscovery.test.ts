@@ -1,27 +1,30 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import type { LawProviderHttpResponse, LawProviderHttpTransport } from "../src/law/httpTransport";
-const { BwbLawDiscovery } = require("../src/law/providers/BwbLawDiscovery") as {
-  BwbLawDiscovery: new (fetchFn: LawProviderHttpTransport, baseUrl?: string) => { search(query: string): Promise<{ kind: string; entries: Array<Record<string, unknown>> }> };
-};
+import { LawDiscoveryMalformedResponseError } from "../src/law/LawDiscovery";
 
-const SRU = `<?xml version="1.0"?><searchRetrieveResponse xmlns="http://docs.oasis-open.org/ns/search-ws/sruResponse"><version>2.0</version><numberOfRecords>1</numberOfRecords><records><record><recordData><gzd xmlns="http://standaarden.overheid.nl/sru" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:overheidbwb="http://standaarden.overheid.nl/bwb/terms/"><originalData><overheidbwb:meta><owmskern><dcterms:identifier>BWBR0005537</dcterms:identifier><dcterms:title>Algemene wet bestuursrecht</dcterms:title></owmskern><bwbipm><overheidbwb:toestand>http://wetten.overheid.nl/id/BWBR0005537/2026-08-15/0</overheidbwb:toestand></bwbipm></overheidbwb:meta></originalData><enrichedData><overheidbwb:locatie_toestand>https://repository.officiele-overheidspublicaties.nl/bwb/BWBR0005537/2026-08-15_0/xml/BWBR0005537_2026-08-15_0.xml</overheidbwb:locatie_toestand></enrichedData></gzd></recordData></record></records></searchRetrieveResponse>`;
-
-function response(text: string, status = 200): LawProviderHttpResponse {
-  return { ok: status >= 200 && status < 300, status, text: async () => text, json: async () => JSON.parse(text) };
-}
+const { BwbLawDiscovery } = require("../src/law/providers/BwbLawDiscovery") as { BwbLawDiscovery: new (fetchFn: LawProviderHttpTransport, baseUrl?: string, currentDate?: () => string) => { search(query: string): Promise<{ kind: string; entries: Array<Record<string, unknown>> }> } };
+const DATE = "2026-09-15"; const BASE = "https://example.test/sru/Search";
+const locator = (id: string, stateDate: string, version = "0") => `https://repository.officiele-overheidspublicaties.nl/bwb/${id}/${stateDate}_${version}/xml/${id}_${stateDate}_${version}.xml`;
+const toestand = (id: string, stateDate: string, version = "0") => `http://wetten.overheid.nl/id/${id}/${stateDate}/${version}`;
+function record(options: { id?: string; title?: string; stateDate?: string; version?: string; validStart?: string; validEnd?: string; visibleStart?: string; visibleEnd?: string; stateId?: string; locatorValue?: string } = {}) { const id = options.id ?? "BWBR0005537"; const stateDate = options.stateDate ?? "2026-08-15"; const version = options.version ?? "0"; return `<record><recordData><gzd xmlns="http://standaarden.overheid.nl/sru" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:overheidbwb="http://standaarden.overheid.nl/bwb/terms/"><originalData><overheidbwb:meta><owmskern><dcterms:identifier>${id}</dcterms:identifier><dcterms:title>${options.title ?? "Algemene wet bestuursrecht"}</dcterms:title></owmskern><bwbipm><overheidbwb:toestand>${options.stateId ?? toestand(id, stateDate, version)}</overheidbwb:toestand><overheidbwb:geldigheidsperiode_startdatum>${options.validStart ?? "2026-01-01"}</overheidbwb:geldigheidsperiode_startdatum><overheidbwb:geldigheidsperiode_einddatum>${options.validEnd ?? "9999-12-31"}</overheidbwb:geldigheidsperiode_einddatum><overheidbwb:zichtperiode_startdatum>${options.visibleStart ?? "2026-01-01"}</overheidbwb:zichtperiode_startdatum><overheidbwb:zichtperiode_einddatum>${options.visibleEnd ?? "9999-12-31"}</overheidbwb:zichtperiode_einddatum></bwbipm></overheidbwb:meta></originalData><enrichedData><overheidbwb:locatie_toestand>${options.locatorValue ?? locator(id, stateDate, version)}</overheidbwb:locatie_toestand></enrichedData></gzd></recordData></record>`; }
+function sru(records: string[], count = records.length) { return `<searchRetrieveResponse xmlns="http://docs.oasis-open.org/ns/search-ws/sruResponse"><version>2.0</version><numberOfRecords>${count}</numberOfRecords><records>${records.join("")}</records></searchRetrieveResponse>`; }
+function response(text: string, status = 200): LawProviderHttpResponse { return { ok: status >= 200 && status < 300, status, text: async () => text, json: async () => JSON.parse(text) }; }
+function harness(xml: string, currentDate = DATE) { const urls: string[] = []; const fetchFn: LawProviderHttpTransport = async (url) => { urls.push(url); return response(xml); }; return { urls, discovery: new BwbLawDiscovery(fetchFn, BASE, () => currentDate) }; }
 
 describe("BwbLawDiscovery", () => {
-  it("returns a source-backed BWBR result and bounds SRU requests", async () => {
-    const urls: string[] = [];
-    const fetchFn: LawProviderHttpTransport = async (url) => { urls.push(url); return response(SRU); };
-    const result = await new BwbLawDiscovery(fetchFn, "https://example.test/sru/Search").search("Algemene");
-    assert.equal(result.kind, "results");
-    assert.deepEqual(result.entries[0], {
-      jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Algemene wet bestuursrecht",
-      sourceUrl: "https://repository.officiele-overheidspublicaties.nl/bwb/BWBR0005537/2026-08-15_0/xml/BWBR0005537_2026-08-15_0.xml",
-    });
-    const request = new URL(urls[0]);
-    assert.equal(request.searchParams.get("maximumRecords"), "8");
-  });
+  it("adds both legal-time filters to title and direct queries", async () => { const title = harness(sru([record()])); await title.discovery.search("Algemene"); const direct = harness(sru([record()])); await direct.discovery.search("BWBR0005537"); for (const url of [title.urls[0], direct.urls[0]]) { const query = new URL(url).searchParams.get("query")!; assert.match(query, /geldigheidsdatum=2026-09-15/u); assert.match(query, /zichtdatum=2026-09-15/u); } assert.match(new URL(direct.urls[0]).searchParams.get("query")!, /dcterms\.identifier==BWBR0005537/u); });
+  it("accepts one valid current-state response", async () => { const { discovery } = harness(sru([record()])); const result = await discovery.search("BWBR0005537"); assert.equal(result.kind, "results"); assert.equal(result.entries.length, 1); assert.equal(result.entries[0].sourceUrl, locator("BWBR0005537", "2026-08-15")); });
+  for (const [name, fields] of [["historical validity", { validStart: "2020-01-01", validEnd: "2020-12-31" }], ["future validity", { validStart: "2027-01-01" }], ["visibility", { visibleStart: "2020-01-01", visibleEnd: "2020-12-31" }]] as const) it(`rejects state outside ${name} interval`, async () => { const { discovery } = harness(sru([record(fields)])); await assert.rejects(discovery.search("BWBR0005537"), LawDiscoveryMalformedResponseError); });
+  it("rejects invalid dates before transport, including Gregorian edge cases", async () => { for (const date of ["2026-99-99", "2026-02-30", "2027-02-29", "2026-00-01", "2026-01-00", "0000-01-01", "2026-1-1", "arbitrary text"]) { let calls = 0; const fetchFn: LawProviderHttpTransport = async () => { calls++; return response(sru([])); }; await assert.rejects(new BwbLawDiscovery(fetchFn, BASE, () => date).search("Algemene"), LawDiscoveryMalformedResponseError); assert.equal(calls, 0, date); } const leap = harness(sru([record({ validStart: "2028-02-01" })]), "2028-02-29"); assert.equal((await leap.discovery.search("Algemene")).kind, "results"); });
+  it("fails closed for two simultaneously applicable direct states", async () => { const { discovery } = harness(sru([record(), record({ stateDate: "2026-09-01" })])); await assert.rejects(discovery.search("BWBR0005537"), LawDiscoveryMalformedResponseError); });
+  it("returns distinct BWBR identities from title search", async () => { const { discovery } = harness(sru([record(), record({ id: "BWBR0006364", title: "Andere wet" })])); const result = await discovery.search("Algemene"); assert.equal(result.entries.length, 2); });
+  it("deduplicates identical current-state records", async () => { const { discovery } = harness(sru([record(), record()])); assert.equal((await discovery.search("Algemene")).entries.length, 1); });
+  it("rejects conflicting same-identity state duplicates", async () => { const { discovery } = harness(sru([record(), record({ stateDate: "2026-09-01" })])); await assert.rejects(discovery.search("Algemene"), /conflicted|ambiguous/u); });
+  it("rejects toestand BWBR mismatch", async () => { const { discovery } = harness(sru([record({ stateId: toestand("BWBR0006364", "2026-08-15") })])); await assert.rejects(discovery.search("Algemene"), LawDiscoveryMalformedResponseError); });
+  it("rejects locator BWBR mismatch", async () => { const { discovery } = harness(sru([record({ locatorValue: locator("BWBR0006364", "2026-08-15") })])); await assert.rejects(discovery.search("Algemene"), LawDiscoveryMalformedResponseError); });
+  it("rejects toestand and locator version mismatch", async () => { const { discovery } = harness(sru([record({ version: "0", locatorValue: locator("BWBR0005537", "2026-08-15", "1") })])); await assert.rejects(discovery.search("Algemene"), LawDiscoveryMalformedResponseError); });
+  it("rejects missing or malformed temporal metadata", async () => { const { discovery } = harness(sru([record({ validStart: "not-a-date" })])); await assert.rejects(discovery.search("Algemene"), LawDiscoveryMalformedResponseError); });
+  it("does not fall back to title search after a definitive direct miss", async () => { const urls: string[] = []; const fetchFn: LawProviderHttpTransport = async (url) => { urls.push(url); return response(sru([], 0)); }; const result = await new BwbLawDiscovery(fetchFn, BASE, () => DATE).search("BWBR0005537"); assert.equal(result.kind, "no-results"); assert.equal(urls.length, 1); });
+  it("enforces eight normalized results", async () => { const records = Array.from({ length: 9 }, (_, i) => record({ id: `BWBR${String(5537 + i).padStart(7, "0")}`, title: `Wet ${i}` })); const { discovery } = harness(sru(records)); assert.equal((await discovery.search("Algemene")).entries.length, 8); });
 });

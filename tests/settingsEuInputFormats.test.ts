@@ -233,7 +233,7 @@ describe("EU Settings input-format presentation", () => {
       getSettingDefinitions(): Array<{ control?: { key?: string; options?: Record<string, string> } }>;
     };
     const definition = tab.getSettingDefinitions().find((candidate) => candidate.control?.key === "defaultJurisdiction");
-    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES", "FI", "IT"]);
+    assert.deepEqual(Object.keys(definition?.control?.options ?? {}), ["EU", "DE", "AT", "CH", "ES", "FI", "IT", "NL"]);
   });
 
   it("renders Italy support without a language setting", async () => {
@@ -275,8 +275,22 @@ describe("EU Settings input-format presentation", () => {
     assert.equal(FakePlugin.requestUrlCalls, 0);
   });
 
+  it("registers the BWB discovery provider for NL in the production command", async () => {
+    const { plugin } = loadPlugin("en", {});
+    await (plugin as unknown as { onload(): Promise<void> }).onload();
+    plugin.commands[0]?.callback?.();
+
+    const modal = FakeModal.instances[0] as unknown as {
+      discoveryProviders: ReadonlyMap<string, { jurisdiction: string; sourceLabel: string }>;
+    };
+    const provider = modal.discoveryProviders.get("NL");
+    assert.ok(provider);
+    assert.equal(provider.jurisdiction, "NL");
+    assert.equal(provider.sourceLabel, "BWB / Wetten.nl");
+  });
+
   it("round-trips supported jurisdiction values and fails malformed data back to EU", async () => {
-    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES", "FI", "IT"] as const) {
+    for (const jurisdiction of ["EU", "DE", "AT", "CH", "ES", "FI", "IT", "NL"] as const) {
       const { plugin } = loadPlugin("en", { defaultJurisdiction: jurisdiction });
       await (plugin as unknown as { onload(): Promise<void> }).onload();
       assert.equal(

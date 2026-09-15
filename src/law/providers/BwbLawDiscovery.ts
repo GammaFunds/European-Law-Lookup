@@ -9,19 +9,21 @@ const MAX_RESULTS = 8;
 export class BwbLawDiscovery implements LawDiscoveryProvider {
   readonly jurisdiction = "NL" as const;
   readonly sourceLabel = "BWB / Wetten.nl";
-  constructor(private readonly fetchFn: LawProviderHttpTransport, private readonly baseUrl = DEFAULT_URL) {}
+  constructor(private readonly fetchFn: LawProviderHttpTransport, private readonly baseUrl = DEFAULT_URL, private readonly currentDate: () => string = () => new Date().toISOString().slice(0, 10)) {}
 
   async search(query: string): Promise<LawDiscoveryResult> {
     const value = query.trim().replace(/\s+/gu, " ");
     if (value.length < 2) return { kind: "no-results", entries: [] };
+    const date = this.currentDate();
+    if (!isDate(date)) throw new LawDiscoveryMalformedResponseError("BWB discovery current date was malformed");
     const direct = value.toUpperCase();
-    const cql = BWBR.test(direct) ? `dcterms.identifier==${direct}` : `titel=${quote(value)}`;
+    const cql = `(${BWBR.test(direct) ? `dcterms.identifier==${direct}` : `titel=${quote(value)}`} and geldigheidsdatum=${date} and zichtdatum=${date})`;
     const url = this.url(cql);
     const response = await this.request(url);
     if (response.status === 404) return { kind: "no-results", entries: [] };
     if (!response.ok) throw new LawDiscoveryUnavailableError(`BWB discovery failed: HTTP ${response.status ?? "unknown"}`);
     const xml = await this.read(response);
-    const records = parseSru(xml);
+    const records = parseSru(xml, date);
     const entries: LawMetadataSearchEntry[] = [];
     const seen = new Set<string>();
     for (const record of records) {
@@ -48,8 +50,8 @@ export class BwbLawDiscovery implements LawDiscoveryProvider {
   }
 }
 
-interface SruRecord { id: string; title: string; locator?: string; }
-function parseSru(xml: string): SruRecord[] {
+interface SruRecord { id: string; title: string; toestand: string; locator: string; }
+function parseSru(xml: string, date: string): SruRecord[] {
   const root = parseXml(xml);
   if (root.name !== "searchRetrieveResponse") throw new LawDiscoveryMalformedResponseError("BWB SRU root was malformed");
   const number = childText(root, "numberOfRecords");
@@ -57,12 +59,19 @@ function parseSru(xml: string): SruRecord[] {
   const records = descendants(root, "record").map((record) => {
     const id = childText(record, "identifier");
     const title = childText(record, "title").trim();
+    const toestand = childText(record, "toestand").trim();
     const locator = childText(record, "locatie_toestand").trim();
-    if (!BWBR.test(id) || !title) throw new LawDiscoveryMalformedResponseError("BWB SRU identity or title was missing");
-    if (locator && !/^https:\/\/repository\.officiele-overheidspublicaties\.nl\/bwb\/BWBR\d{7}\/[\w-]+\/xml\/BWBR\d{7}_[\w-]+\.xml$/u.test(locator)) throw new LawDiscoveryMalformedResponseError("BWB toestand locator was malformed");
-    const locatorId = locator?.match(/\/bwb\/(BWBR\d{7})\//u)?.[1];
-    if (locator && locatorId !== id) throw new LawDiscoveryMalformedResponseError("BWB locator identity mismatch");
-    return { id, title, ...(locator ? { locator } : {}) };
+    const stateMatch = toestand.match(/^https?:\/\/wetten\.overheid\.nl\/id\/(BWBR\d{7})\/(\d{4}-\d{2}-\d{2})\/(\d+)$/u);
+    const locatorMatch = locator.match(/^https:\/\/repository\.officiele-overheidspublicaties\.nl\/bwb\/(BWBR\d{7})\/(\d{4}-\d{2}-\d{2})_(\d+)\/xml\/\1_(\d{4}-\d{2}-\d{2})_(\d+)\.xml$/u);
+    const validStart = childText(record, "geldigheidsperiode_startdatum");
+    const validEnd = childText(record, "geldigheidsperiode_einddatum");
+    const visibleStart = childText(record, "zichtperiode_startdatum");
+    const visibleEnd = childText(record, "zichtperiode_einddatum");
+    if (!BWBR.test(id) || !title || !stateMatch || !locatorMatch || !isDate(validStart) || !isDate(validEnd) || !isDate(visibleStart) || !isDate(visibleEnd)) throw new LawDiscoveryMalformedResponseError("BWB SRU current-state metadata was malformed");
+    if (stateMatch[1] !== id || locatorMatch[1] !== id || stateMatch[2] !== locatorMatch[2] || stateMatch[3] !== locatorMatch[3] || locatorMatch[2] !== locatorMatch[3] && locatorMatch[2] === "") throw new LawDiscoveryMalformedResponseError("BWB current-state identity conflicted");
+    if (locatorMatch[2] !== locatorMatch[4] || locatorMatch[3] !== locatorMatch[5]) throw new LawDiscoveryMalformedResponseError("BWB current-state identity conflicted");
+    if (date < validStart || date > validEnd || date < visibleStart || date > visibleEnd) throw new LawDiscoveryMalformedResponseError("BWB current-state date metadata conflicted");
+    return { id, title, toestand, locator };
   });
   if (Number(number) > 0 && records.length === 0) throw new LawDiscoveryMalformedResponseError("BWB SRU records were missing");
   return records;
@@ -77,3 +86,4 @@ function descendants(node:XmlNode,name:string):XmlNode[]{return node.children.fl
 function childText(node:XmlNode,name:string):string{const found=descendants(node,name); return found.length===1?textOf(found[0]):found.length===0?"":found.map(textOf).join("\u0000");}
 function textOf(node:XmlNode):string{return `${node.text} ${node.children.map(textOf).join(" ")}`.replace(/\s+/gu," ").trim();}
 function quote(value:string){return `"${value.replace(/"/gu,'\\"')}"`;}
+function isDate(value: string): boolean { const match=/^(\d{4})-(\d{2})-(\d{2})$/u.exec(value); if(!match)return false; const year=Number(match[1]); const month=Number(match[2]); const day=Number(match[3]); if(year===0||month<1||month>12||day<1)return false; const leap=year%4===0&&(year%100!==0||year%400===0); const days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31]; return day<=days[month-1]; }

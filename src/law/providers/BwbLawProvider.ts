@@ -30,12 +30,13 @@ export class BwbLawProvider implements LawProvider {
       if (textResponse.status === 404) return null;
       if (!textResponse.ok) throw new Error(`BWB toestand HTTP ${textResponse.status ?? "unknown"}`);
       const document = parseToestand(await textResponse.text(), lawCode, state.toestand);
-      const requestedLabel = `Artikel ${reference.section.replace(/[A-Z]$/u, (suffix) => suffix.toLowerCase())}`;
+      const canonicalSection = reference.section.replace(/[A-Z]$/u, (suffix) => suffix.toLowerCase());
+      const requestedLabel = `Artikel ${canonicalSection}`;
       const articles = descendants(document, "artikel").filter((node) => node.attrs.label === requestedLabel);
       if (articles.length !== 1) return null;
       const text = descendants(articles[0], "al").map(nodeText).join("\n").trim();
       if (!text) throw new Error("BWB Article text missing");
-      return { providerId: this.id, providerLabel: this.label, sourceUrl: state.locator, lawCode, lawTitle: state.title, section: articles[0].attrs.label, referenceType: "article", jurisdiction: "NL", language: "nl", text, retrievedAt: new Date().toISOString(), cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: false };
+      return { providerId: this.id, providerLabel: this.label, sourceUrl: state.locator, lawCode, lawTitle: state.title, section: canonicalSection, referenceType: "article", jurisdiction: "NL", language: "nl", text, retrievedAt: new Date().toISOString(), cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: false };
     } catch (error) {
       if (error instanceof LawProviderUnavailableError) throw error;
       throw new LawProviderUnavailableError(this.id, "BWB lookup failed before a definitive not-found result.", error);

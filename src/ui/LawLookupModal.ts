@@ -68,7 +68,7 @@ function uiText(ui: UiStrings, key: keyof UiStrings): string {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" || value === "NL" ? value : "EU";
 }
 
 const JURISDICTION_LABEL_KEYS = [
@@ -78,6 +78,7 @@ const JURISDICTION_LABEL_KEYS = [
   "jurisdictionSpain",
   "jurisdictionFinland",
   "jurisdictionItaly",
+  "jurisdictionNetherlands",
   "jurisdictionEuropeanUnion",
 ] as const;
 
@@ -196,6 +197,7 @@ export class LawLookupModal extends Modal {
       { code: "ES", label: this.ui.jurisdictionSpain },
       { code: "FI", label: this.ui.jurisdictionFinland ?? "Finland" },
       { code: "IT", label: this.ui.jurisdictionItaly! },
+      { code: "NL", label: this.ui.jurisdictionNetherlands ?? "Netherlands" },
     ];
     const euOption = jurisdictionOptions.find((option) => option.code === "EU")!;
     const collator = new Intl.Collator(uiLocaleForStrings(this.ui), { sensitivity: "base" });
@@ -297,8 +299,8 @@ export class LawLookupModal extends Modal {
     this.clearExplicitLookupLoading();
     const visibleLookupInput = this.lookupInputValue();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
-      this.selectedJurisdiction === "IT" && this.selectedLaw
-        ? this.lookupInputWithSelectedItalyIdentity(visibleLookupInput)
+      (this.selectedJurisdiction === "IT" || this.selectedJurisdiction === "NL") && this.selectedLaw
+        ? this.lookupInputWithSelectedLawIdentity(visibleLookupInput)
         : visibleLookupInput,
       this.selectedJurisdiction,
       this.indexProvider.getEuActIndex(),
@@ -320,7 +322,9 @@ export class LawLookupModal extends Modal {
           ? { ...parsedReference, language: this.selectedFiLanguage === "fi" ? "fin" : "swe" }
           : this.selectedJurisdiction === "IT"
             ? { ...parsedReference, language: "it", normattivaAct: this.selectedLaw?.normattivaAct }
-        : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
+            : this.selectedJurisdiction === "NL"
+              ? parsedReference
+              : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
     this.renderExplicitLookupLoading(lookupId);
@@ -493,7 +497,9 @@ export class LawLookupModal extends Modal {
         text: this.metadataSuggestionLabel(suggestion),
       });
       button.addEventListener("click", () => {
-        const displayedLaw = suggestion.jurisdiction === "IT" ? suggestion.title : suggestion.canonicalInput;
+        const displayedLaw = suggestion.jurisdiction === "IT" || suggestion.jurisdiction === "NL"
+          ? suggestion.title
+          : suggestion.canonicalInput;
         if (this.inputLayout === "split") {
           this.lawInputEl.value = displayedLaw;
         } else {
@@ -559,14 +565,16 @@ export class LawLookupModal extends Modal {
 
   private inputStillHasSelectedLawPrefix(): boolean {
     if (!this.selectedLaw) return false;
-    const displayedLaw = this.selectedLaw.jurisdiction === "IT" ? this.selectedLaw.title : this.selectedLaw.canonicalInput;
+    const displayedLaw = this.selectedLaw.jurisdiction === "IT" || this.selectedLaw.jurisdiction === "NL"
+      ? this.selectedLaw.title
+      : this.selectedLaw.canonicalInput;
     if (this.inputLayout === "split") return this.lawInputEl.value.trim() === displayedLaw.trim();
     return this.inputEl.value.startsWith(`${displayedLaw} `);
   }
 
-  private lookupInputWithSelectedItalyIdentity(input: string): string {
+  private lookupInputWithSelectedLawIdentity(input: string): string {
     if (!this.selectedLaw) return input;
-    const decomposed = decomposeOneLineLookupInput(input, "IT");
+    const decomposed = decomposeOneLineLookupInput(input, this.selectedJurisdiction);
     return decomposed
       ? composeSplitLookupInput(this.selectedLaw.canonicalInput, decomposed.reference)
       : input;

@@ -424,13 +424,13 @@ describe("LawLookupModal jurisdiction selector presentation order", () => {
   it("pins EU first and sorts the remaining visible English labels", () => {
     const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
 
-    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "AT", "FI", "DE", "IT", "ES", "CH"]);
+    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "AT", "FI", "DE", "IT", "NL", "ES", "CH"]);
   });
 
   it("reorders non-EU entries when the active UI language changes to German", () => {
     const harness = buildModalHarness(null, undefined, null, getUiStrings("de"));
 
-    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "DE", "FI", "IT", "AT", "CH", "ES"]);
+    assert.deepEqual(jurisdictionOptionValues(harness), ["EU", "DE", "FI", "IT", "NL", "AT", "CH", "ES"]);
   });
 });
 
@@ -1254,6 +1254,136 @@ describe("LawLookupModal IT discovery and selection boundary", () => {
       assert.doesNotMatch(state.suggestionsEl.children[0]?.text ?? "", /no matching laws|discovery source unavailable|discovery response invalid/u);
       harness.modal.onClose();
     }
+  });
+});
+
+describe("LawLookupModal NL discovery and explicit selection boundary", () => {
+  it("displays the human Dutch title, preserves BWBR identity, and does not look up on selection", async () => {
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "NL",
+      sourceLabel: "BWB / Wetten.nl",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "NL",
+        canonicalInput: "BWBR0005537",
+        title: "Algemene wet bestuursrecht",
+      }] }),
+    };
+    const harness = buildModalHarness(
+      null,
+      async () => ({ ...successfulSection, jurisdiction: "NL", language: "nl" }),
+      new Map([["NL", discoveryProvider]]),
+    );
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "Algemene";
+    harness.inputEl.fire("input");
+    await delay(270);
+    await settle();
+
+    const state = harness.modal as unknown as {
+      suggestionsEl: FakeElement;
+      selectedLaw: { canonicalInput: string; title: string } | null;
+      selectedLawStatusEl: FakeElement;
+    };
+    state.suggestionsEl.children[0].fire("click");
+
+    assert.equal(harness.inputEl.value, "Algemene wet bestuursrecht ");
+    assert.deepEqual(state.selectedLaw, {
+      jurisdiction: "NL",
+      canonicalInput: "BWBR0005537",
+      title: "Algemene wet bestuursrecht",
+      matchKind: "title-contains",
+    });
+    assert.match(state.selectedLawStatusEl.text, /Algemene wet bestuursrecht/iu);
+    assert.equal(harness.requests.length, 0);
+  });
+
+  it("composes the selected BWBR identity for an explicit Dutch Article lookup", async () => {
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "NL", sourceLabel: "BWB / Wetten.nl",
+      search: async () => ({ kind: "results", entries: [{
+        jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Algemene wet bestuursrecht",
+      }] }),
+    };
+    const harness = buildModalHarness(
+      null,
+      async (reference) => ({ ...successfulSection, jurisdiction: reference.jurisdiction, language: reference.language, lawCode: reference.lawCode, section: reference.section }),
+      new Map([["NL", discoveryProvider]]),
+    );
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "Algemene";
+    harness.inputEl.fire("input");
+    await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; formEl: FakeElement };
+    state.suggestionsEl.children[0].fire("click");
+    harness.inputEl.value = "Algemene wet bestuursrecht Art. 1:1";
+    harness.inputEl.fire("input");
+    const lookupButton = state.formEl.children.find((child) => child.tag === "button");
+    assert.ok(lookupButton);
+    lookupButton.fire("click");
+    await settle();
+
+    assert.deepEqual(harness.lastRequest(), {
+      euCelex: undefined,
+      language: undefined,
+      lawCode: "BWBR0005537",
+      section: "1:1",
+      jurisdiction: "NL",
+      referenceType: "article",
+    });
+  });
+
+  it("clears the selected Dutch law when its visible prefix is edited", async () => {
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "NL", sourceLabel: "BWB / Wetten.nl",
+      search: async () => ({ kind: "results", entries: [{ jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Algemene wet bestuursrecht" }] }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["NL", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "NL"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "Algemene"; harness.inputEl.fire("input"); await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: unknown };
+    state.suggestionsEl.children[0].fire("click");
+    harness.inputEl.value = "Andere wet "; harness.inputEl.fire("input");
+    assert.equal(state.selectedLaw, null);
+  });
+
+  it("clears the selected Dutch law on jurisdiction change", async () => {
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "NL", sourceLabel: "BWB / Wetten.nl",
+      search: async () => ({ kind: "results", entries: [{ jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Algemene wet bestuursrecht" }] }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["NL", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "NL"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "Algemene"; harness.inputEl.fire("input"); await delay(270);
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement; selectedLaw: unknown };
+    state.suggestionsEl.children[0].fire("click");
+    harness.jurisdictionSelect.value = "DE"; harness.jurisdictionSelect.fire("change");
+    assert.equal(state.selectedLaw, null);
+  });
+
+  it("suppresses a stale Dutch discovery result after leaving NL", async () => {
+    let resolveDiscovery!: (result: Awaited<ReturnType<LawDiscoveryProvider["search"]>>) => void;
+    const discoveryProvider: LawDiscoveryProvider = {
+      jurisdiction: "NL", sourceLabel: "BWB / Wetten.nl",
+      search: async () => new Promise((resolve) => { resolveDiscovery = resolve; }),
+    };
+    const harness = buildModalHarness(null, undefined, new Map([["NL", discoveryProvider]]));
+    harness.jurisdictionSelect.value = "NL"; harness.jurisdictionSelect.fire("change");
+    harness.inputEl.value = "oude wet"; harness.inputEl.fire("input"); await delay(270);
+    harness.jurisdictionSelect.value = "DE"; harness.jurisdictionSelect.fire("change");
+    resolveDiscovery({ kind: "results", entries: [{ jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Stale Dutch law" }] });
+    await settle();
+    const state = harness.modal as unknown as { suggestionsEl: FakeElement };
+    assert.equal(state.suggestionsEl.children.some((child) => child.text.includes("Stale Dutch law")), false);
+  });
+
+  it("does not render a language selector for NL", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+    FakeSetting.instances = [];
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+    assert.equal(FakeSetting.instances.some((setting) => setting.dropdowns.length > 0), false);
   });
 });
 

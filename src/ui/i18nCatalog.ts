@@ -1886,6 +1886,21 @@ export const FINLAND_UI_STRINGS: Record<UiLanguage, {
   sv: { jurisdictionFinland: "Finland", defaultFiTextLanguage: "Finskt textspråk", defaultFiTextLanguageDescription: "Välj den finska eller svenska versionen av Finlex konsoliderade text.", finlandAcceptedInputFormats: "Finska inmatningsformat", finlandInputExamples: "729/2018 § 1", finlandScopeNote: "Lagar upptäcks live från Finlex; välj en lag först och ange sedan en §-hänvisning. Finska och svenska versioner stöds.", finlandConsolidatedNotice: "Konsoliderad Finlex-text från en officiell källa; den hämtade konsoliderade versionen är markerad som icke-auktoritativ." },
 };
 
+export const NETHERLANDS_UI_STRINGS: Record<UiLanguage, { jurisdictionNetherlands: string }> = {
+  bg: { jurisdictionNetherlands: "Нидерландия" }, cs: { jurisdictionNetherlands: "Nizozemsko" },
+  da: { jurisdictionNetherlands: "Nederlandene" }, de: { jurisdictionNetherlands: "Niederlande" },
+  el: { jurisdictionNetherlands: "Κάτω Χώρες" }, en: { jurisdictionNetherlands: "Netherlands" },
+  es: { jurisdictionNetherlands: "Países Bajos" }, et: { jurisdictionNetherlands: "Madalmaad" },
+  fi: { jurisdictionNetherlands: "Alankomaat" }, fr: { jurisdictionNetherlands: "Pays-Bas" },
+  ga: { jurisdictionNetherlands: "An Ísiltír" }, hr: { jurisdictionNetherlands: "Nizozemska" },
+  hu: { jurisdictionNetherlands: "Hollandia" }, it: { jurisdictionNetherlands: "Paesi Bassi" },
+  lt: { jurisdictionNetherlands: "Nyderlandai" }, lv: { jurisdictionNetherlands: "Nīderlande" },
+  mt: { jurisdictionNetherlands: "In-Netherlands" }, nl: { jurisdictionNetherlands: "Nederland" },
+  pl: { jurisdictionNetherlands: "Niderlandy" }, pt: { jurisdictionNetherlands: "Países Baixos" },
+  ro: { jurisdictionNetherlands: "Țările de Jos" }, sk: { jurisdictionNetherlands: "Holandsko" },
+  sl: { jurisdictionNetherlands: "Nizozemska" }, sv: { jurisdictionNetherlands: "Nederländerna" },
+};
+
 export const ITALY_UI_STRINGS: Record<UiLanguage, {
   jurisdictionItaly: string;
   italySupportDescription: string;

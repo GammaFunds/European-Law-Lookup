@@ -24,7 +24,7 @@ describe("BwbLawProvider", () => {
     const urls: string[] = [];
     const fetchFn: LawProviderHttpTransport = async (url) => { urls.push(url); return response(url.includes("repository") ? XML : `<searchRetrieveResponse xmlns="http://docs.oasis-open.org/ns/search-ws/sruResponse"><numberOfRecords>1</numberOfRecords><records><record><recordData><gzd xmlns="http://standaarden.overheid.nl/sru" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:overheidbwb="http://standaarden.overheid.nl/bwb/terms/"><originalData><overheidbwb:meta><owmskern><dcterms:identifier>BWBR0005537</dcterms:identifier><dcterms:title>Algemene wet bestuursrecht</dcterms:title></owmskern><bwbipm><overheidbwb:toestand>http://wetten.overheid.nl/id/BWBR0005537/2026-08-15/0</overheidbwb:toestand><overheidbwb:geldigheidsperiode_startdatum>2026-08-15</overheidbwb:geldigheidsperiode_startdatum><overheidbwb:geldigheidsperiode_einddatum>9999-12-31</overheidbwb:geldigheidsperiode_einddatum><overheidbwb:zichtperiode_startdatum>2026-08-15</overheidbwb:zichtperiode_startdatum><overheidbwb:zichtperiode_einddatum>9999-12-31</overheidbwb:zichtperiode_einddatum></bwbipm></overheidbwb:meta></originalData><enrichedData><overheidbwb:locatie_toestand>https://repository.officiele-overheidspublicaties.nl/bwb/BWBR0005537/2026-08-15_0/xml/BWBR0005537_2026-08-15_0.xml</overheidbwb:locatie_toestand></enrichedData></gzd></recordData></record></records></searchRetrieveResponse>`); };
     const section = await new BwbLawProvider("https://example.test/sru/Search", fetchFn, () => "2026-09-14").getSection({ lawCode: "BWBR0005537", section: "1:1", jurisdiction: "NL" });
-    assert.equal(section?.providerId, "bwb"); assert.equal(section?.section, "Artikel 1:1"); assert.equal(section?.language, "nl"); assert.equal(section?.text, "Deze wet verstaat onder bestuursorgaan:"); assert.equal(urls.length, 2);
+    assert.equal(section?.providerId, "bwb");     assert.equal(section?.section, "1:1"); assert.equal(section?.language, "nl"); assert.equal(section?.text, "Deze wet verstaat onder bestuursorgaan:"); assert.equal(urls.length, 2);
   });
 
   it("rejects invalid current dates before any network request", async () => {
@@ -54,9 +54,18 @@ describe("BwbLawProvider", () => {
     }, () => "2026-09-14");
 
     const matching = await provider.getSection({ lawCode: "BWBR0005537", section: "1A", jurisdiction: "NL" });
-    assert.equal(matching?.section, "Artikel 1a");
+    assert.equal(matching?.section, "1a");
     assert.equal(matching?.text, "Deze wet verstaat onder bestuursorgaan:");
     assert.equal(calls.length, 2);
     assert.equal(await provider.getSection({ lawCode: "BWBR0005537", section: "1B", jurisdiction: "NL" }), null);
+  });
+
+  it("returns canonical article reference without the source-native Artikel prefix", async () => {
+    const urls: string[] = [];
+    const fetchFn: LawProviderHttpTransport = async (url) => { urls.push(url); return response(url.includes("repository") ? XML : discoveryXml()); };
+    const section = await new BwbLawProvider("https://example.test/sru/Search", fetchFn, () => "2026-09-14").getSection({ lawCode: "BWBR0005537", section: "1:1", jurisdiction: "NL" });
+    assert.equal(section?.section, "1:1");
+    assert.equal(section?.providerId, "bwb");
+    assert.equal(section?.text, "Deze wet verstaat onder bestuursorgaan:");
   });
 });

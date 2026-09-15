@@ -32,7 +32,7 @@ const REQUIRED_UI_STRING_KEYS = [
   "euOfficialLanguageNotice", "celex", "sourceMetadata", "cacheMetadata", "swissOfficialTextLanguage", "unexpectedLookupFailure", "lawSectionNotFound", "lawProviderUnavailable", "normattivaSourceUnverified",
   "refreshEuActIndex",
   "spainAcceptedInputFormats", "spainInputExamples", "spainScopeNote",
-  "jurisdictionFinland", "defaultFiTextLanguage", "defaultFiTextLanguageDescription", "finlandAcceptedInputFormats", "finlandInputExamples", "finlandScopeNote", "finlandConsolidatedNotice",
+  "jurisdictionFinland", "jurisdictionNetherlands", "defaultFiTextLanguage", "defaultFiTextLanguageDescription", "finlandAcceptedInputFormats", "finlandInputExamples", "finlandScopeNote", "finlandConsolidatedNotice",
   "jurisdictionItaly", "italySupportDescription", "italyNonAuthoritativeNotice",
   "loadingLawText", "loadingLawSuggestions", "discoveryNoResults", "discoveryUnavailable", "discoveryMalformed",
 ] as const;
@@ -583,6 +583,11 @@ describe("ui i18n", () => {
 
   it("provides German Switzerland label", () => {
     assert.equal(getUiStrings("de").jurisdictionSwitzerland, "Schweiz");
+  });
+
+  it("provides localized Netherlands labels in German and English", () => {
+    assert.equal(getUiStrings("de").jurisdictionNetherlands, "Niederlande");
+    assert.equal(getUiStrings("en").jurisdictionNetherlands, "Netherlands");
   });
 
   it("provides English Switzerland label", () => {

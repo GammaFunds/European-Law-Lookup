@@ -9,7 +9,7 @@ interface CitationFormatterOptions {
 }
 
 export function getLawSectionDisplayLabel(section: LawSection): string | undefined {
-  if (section.jurisdiction === "IT") {
+  if (section.jurisdiction === "IT" || section.jurisdiction === "NL") {
     const lawTitle = section.lawTitle.trim();
     return lawTitle || undefined;
   }
