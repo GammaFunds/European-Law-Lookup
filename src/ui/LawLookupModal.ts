@@ -122,6 +122,21 @@ export interface LawLookupModalIndexProvider {
   getEuActIndex(): EuActIndex | null;
 }
 
+const JURISDICTION_EXAMPLES: Record<LawJurisdiction, { law: string; reference: string; single: string }> = {
+  EU: { law: "GDPR", reference: "Art. 6", single: "GDPR Art. 6" },
+  DE: { law: "BGB", reference: "§ 823", single: "§ 823 BGB" },
+  AT: { law: "ABGB", reference: "§ 1295", single: "§ 1295 ABGB" },
+  CH: { law: "OR", reference: "Art. 41", single: "Art. 41 OR" },
+  ES: { law: "BOE-A-2015-10566", reference: "Art. 1", single: "BOE-A-2015-10566 Art. 1" },
+  FI: { law: "729/2018", reference: "§ 1", single: "729/2018 § 1" },
+  IT: { law: "Codice dell'amministrazione digitale", reference: "Art. 20", single: "Codice dell'amministrazione digitale Art. 20" },
+  NL: { law: "Algemene wet bestuursrecht", reference: "Art. 1:1", single: "Algemene wet bestuursrecht Art. 1:1" },
+};
+
+function jurisdictionPlaceholder(template: string, example: string): string {
+  return template.replace("{example}", example);
+}
+
 const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
 const COMPLETE_SPANISH_BOE_IDENTIFIER = /^BOE-A-\d{4}-\d{1,5}$/iu;
 let nextInputId = 0;
@@ -182,8 +197,8 @@ export class LawLookupModal extends Modal {
     const formEl = contentEl.createDiv({ cls: "de-law-lookup-form" });
     this.formEl = formEl;
     this.inputLayout = normalizeInputLayout(this.settingsStore.getInputLayout?.());
-    this.renderInputControls();
     this.selectedJurisdiction = normalizeJurisdiction(this.settingsStore.getDefaultJurisdiction?.());
+    this.renderInputControls();
 
     const jurisdictionSelect = formEl.createEl("select", {
       cls: "de-law-jurisdiction-select",
@@ -225,6 +240,7 @@ export class LawLookupModal extends Modal {
       } else {
         this.inputEl.value = "";
       }
+      this.updatePlaceholders();
       this.renderSelectedLawStatus();
       this.renderResultMessage(this.ui.noLookupRunYet);
       this.renderActions();
@@ -582,7 +598,34 @@ export class LawLookupModal extends Modal {
       : input;
   }
 
+  private jurisdictionPlaceholder(example: string): string {
+    return jurisdictionPlaceholder(this.ui.lawReferencePlaceholder, example);
+  }
+
+  private updatePlaceholders(): void {
+    const examples = JURISDICTION_EXAMPLES[this.selectedJurisdiction];
+    if (this.inputLayout === "split") {
+      if (this.lawInputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.law);
+        if (typeof this.lawInputEl.setAttribute === "function") this.lawInputEl.setAttribute("placeholder", ph);
+        else this.lawInputEl.placeholder = ph;
+      }
+      if (this.referenceInputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.reference);
+        if (typeof this.referenceInputEl.setAttribute === "function") this.referenceInputEl.setAttribute("placeholder", ph);
+        else this.referenceInputEl.placeholder = ph;
+      }
+    } else {
+      if (this.inputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.single);
+        if (typeof this.inputEl.setAttribute === "function") this.inputEl.setAttribute("placeholder", ph);
+        else this.inputEl.placeholder = ph;
+      }
+    }
+  }
+
   private renderInputControls(law = "", reference = "", singleValue = ""): void {
+    const examples = JURISDICTION_EXAMPLES[this.selectedJurisdiction];
     if (this.inputLayout === "split") {
       const lawId = `de-law-law-input-${++nextInputId}`;
       const referenceId = `de-law-reference-input-${++nextInputId}`;
@@ -591,7 +634,7 @@ export class LawLookupModal extends Modal {
         type: "text",
         cls: "de-law-law-input",
         value: law,
-        placeholder: this.ui.lawReferencePlaceholder,
+        placeholder: this.jurisdictionPlaceholder(examples.law),
         attr: { id: lawId, "aria-label": this.ui.lawLegalAct },
       });
       const referenceLabel = this.formEl.createEl("label", { text: this.ui.referenceInput, attr: { for: referenceId } });
@@ -599,7 +642,7 @@ export class LawLookupModal extends Modal {
         type: "text",
         cls: "de-law-reference-input",
         value: reference,
-        placeholder: this.ui.articleReferences,
+        placeholder: this.jurisdictionPlaceholder(examples.reference),
         attr: { id: referenceId, "aria-label": this.ui.referenceInput },
       });
       this.inputLabels = [lawLabel, referenceLabel];
@@ -620,7 +663,7 @@ export class LawLookupModal extends Modal {
       const input = this.formEl.createEl("input", {
         type: "text",
         value: singleValue,
-        placeholder: this.ui.lawReferencePlaceholder,
+        placeholder: this.jurisdictionPlaceholder(examples.single),
       });
       this.inputLabels = [];
       this.inputElements = [input];

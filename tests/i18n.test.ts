@@ -637,4 +637,20 @@ describe("ui i18n", () => {
       "translation-en",
     );
   });
+
+  it("RED 6: every locale lawReferencePlaceholder contains exactly one {example} token and no old § 823 BGB", () => {
+    for (const code of UI_LANGUAGE_CODES) {
+      const strings = getUiStrings(code);
+      const placeholder = (strings as unknown as Record<string, string>).lawReferencePlaceholder;
+      assert.equal(typeof placeholder, "string", `${code} lawReferencePlaceholder must be a string`);
+      assert.match(placeholder, /\{example\}/u, `${code} must contain {example} token`);
+      const tokenCount = placeholder.split("{example}").length - 1;
+      assert.equal(tokenCount, 1, `${code} must contain exactly one {example} token`);
+      assert.doesNotMatch(placeholder, /§\s*823\s*BGB/u, `${code} must not contain old hard-coded § 823 BGB`);
+      const before = placeholder.split("{example}")[0];
+      assert.match(before, /\S/u, `${code} must have non-empty localized text before {example}`);
+      const interpolated = placeholder.replace("{example}", "TestExample");
+      assert.doesNotMatch(interpolated, /\{example\}/u, `${code} interpolation must not leave {example} token`);
+    }
+  });
 });

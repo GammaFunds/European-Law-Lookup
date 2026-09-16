@@ -26,12 +26,13 @@ class FakeElement {
   parentElement: FakeElement | null = null;
   private readonly classes = new Set<string>();
 
-  createEl(tag: string, options?: { text?: string; value?: string; cls?: string; attr?: Record<string, string> }): FakeElement {
+  createEl(tag: string, options?: { text?: string; value?: string; cls?: string; placeholder?: string; attr?: Record<string, string> }): FakeElement {
     const child = new FakeElement();
     child.tag = tag;
     child.text = options?.text ?? "";
     child.value = options?.value ?? "";
     child.applyOptions(options);
+    if (options?.placeholder !== undefined) child.setAttribute("placeholder", options.placeholder);
     child.parentElement = this;
     this.children.push(child);
     return child;
@@ -1857,6 +1858,128 @@ describe("LawLookupModal CH official language selection", () => {
     assert.deepEqual(requests, [{ language: undefined }]);
   });
 
+});
+
+describe("LawLookupModal jurisdiction-aware placeholders", () => {
+  it("RED 1: split placeholders are jurisdiction-aware (DE then NL)", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    harness.jurisdictionSelect.value = "DE";
+    harness.jurisdictionSelect.fire("change");
+    const split = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(split.lawInputEl.attributes.placeholder ?? "", /BGB/);
+    assert.match(split.referenceInputEl.attributes.placeholder ?? "", /§ 823/);
+
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+    assert.match(split.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+    assert.match(split.referenceInputEl.attributes.placeholder ?? "", /Art\. 1:1/);
+    assert.doesNotMatch(split.lawInputEl.attributes.placeholder ?? "", /BGB/);
+    assert.doesNotMatch(split.referenceInputEl.attributes.placeholder ?? "", /§ 823/);
+  });
+
+  it("RED 2: initial default jurisdiction NL renders correct placeholders", () => {
+    const settingsStore = {
+      getDefaultLawSourceVariant: () => "official-de",
+      getDefaultEuLawLanguage: () => "de" as EuLawLanguage,
+      setDefaultEuLawLanguage: async (_value: EuLawLanguage): Promise<void> => {},
+      getDefaultJurisdiction: () => "NL" as LawJurisdiction,
+      getShowInsertedSourceMetadata: () => true,
+      setShowInsertedSourceMetadata: async (_value: boolean): Promise<void> => {},
+      getInputLayout: () => "split" as const,
+    };
+    const modal = new LawLookupModal(
+      {} as App,
+      { getSection: async () => null } as unknown as ProviderRegistry,
+      settingsStore,
+      getUiStrings("en"),
+      { getEuActIndex: () => null },
+    );
+    modal.onOpen();
+    const split = modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(split.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+    assert.match(split.referenceInputEl.attributes.placeholder ?? "", /Art\. 1:1/);
+  });
+
+  it("RED 3: one-line example is jurisdiction-aware (NL then ES)", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+    assert.match(harness.inputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht Art\. 1:1/);
+
+    harness.jurisdictionSelect.value = "ES";
+    harness.jurisdictionSelect.fire("change");
+    assert.match(harness.inputEl.attributes.placeholder ?? "", /BOE-A-2015-10566 Art\. 1/);
+  });
+
+  it("RED 4: all jurisdictions return correct examples", () => {
+    const cases: Array<[LawJurisdiction, string, string]> = [
+      ["EU", "GDPR", "Art. 6"],
+      ["DE", "BGB", "§ 823"],
+      ["AT", "ABGB", "§ 1295"],
+      ["CH", "OR", "Art. 41"],
+      ["ES", "BOE-A-2015-10566", "Art. 1"],
+      ["FI", "729/2018", "§ 1"],
+      ["IT", "Codice dell'amministrazione digitale", "Art. 20"],
+      ["NL", "Algemene wet bestuursrecht", "Art. 1:1"],
+    ];
+    for (const [jurisdiction, expectedLaw, expectedRef] of cases) {
+      const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+      assert.equal(harness.modal.setInputLayout("split"), true);
+      harness.jurisdictionSelect.value = jurisdiction;
+      harness.jurisdictionSelect.fire("change");
+      const split = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+      assert.match(split.lawInputEl.attributes.placeholder ?? "", new RegExp(expectedLaw), `law placeholder for ${jurisdiction}`);
+      assert.match(split.referenceInputEl.attributes.placeholder ?? "", new RegExp(expectedRef), `reference placeholder for ${jurisdiction}`);
+    }
+  });
+
+  it("RED 5: UI language is independent of jurisdiction (German UI + NL = German prefix + Dutch example)", () => {
+    const deHarness = buildModalHarness(null, undefined, null, getUiStrings("de"));
+    assert.equal(deHarness.modal.setInputLayout("split"), true);
+    deHarness.jurisdictionSelect.value = "NL";
+    deHarness.jurisdictionSelect.fire("change");
+    const deSplit = deHarness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(deSplit.lawInputEl.attributes.placeholder ?? "", /z\. B\./);
+    assert.match(deSplit.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+
+    const enHarness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+    assert.equal(enHarness.modal.setInputLayout("split"), true);
+    enHarness.jurisdictionSelect.value = "NL";
+    enHarness.jurisdictionSelect.fire("change");
+    const enSplit = enHarness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(enSplit.lawInputEl.attributes.placeholder ?? "", /e\.g\./);
+    assert.match(enSplit.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+
+    const deDeHarness = buildModalHarness(null, undefined, null, getUiStrings("de"));
+    assert.equal(deDeHarness.modal.setInputLayout("split"), true);
+    deDeHarness.jurisdictionSelect.value = "DE";
+    deDeHarness.jurisdictionSelect.fire("change");
+    const deDeSplit = deDeHarness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(deDeSplit.lawInputEl.attributes.placeholder ?? "", /z\. B\./);
+    assert.match(deDeSplit.lawInputEl.attributes.placeholder ?? "", /BGB/);
+  });
+
+  it("RED 7: layout switch preserves correct jurisdiction examples for NL", () => {
+    const harness = buildModalHarness(null, undefined, null, getUiStrings("en"));
+    harness.jurisdictionSelect.value = "NL";
+    harness.jurisdictionSelect.fire("change");
+
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    const split = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(split.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+    assert.match(split.referenceInputEl.attributes.placeholder ?? "", /Art\. 1:1/);
+
+    assert.equal(harness.modal.setInputLayout("single"), true);
+    const singleModal = harness.modal as unknown as { formEl: FakeElement };
+    const singleInput = singleModal.formEl.children.find((child) => child.tag === "input") as FakeElement;
+    assert.match(singleInput.attributes.placeholder ?? "", /Algemene wet bestuursrecht Art\. 1:1/);
+
+    assert.equal(harness.modal.setInputLayout("split"), true);
+    const splitAgain = harness.modal as unknown as { lawInputEl: FakeElement; referenceInputEl: FakeElement };
+    assert.match(splitAgain.lawInputEl.attributes.placeholder ?? "", /Algemene wet bestuursrecht/);
+    assert.match(splitAgain.referenceInputEl.attributes.placeholder ?? "", /Art\. 1:1/);
+  });
 });
 
 describe("LawLookupModal test harness module-state isolation", () => {
