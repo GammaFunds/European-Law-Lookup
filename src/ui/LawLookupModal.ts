@@ -131,6 +131,7 @@ const JURISDICTION_EXAMPLES: Record<LawJurisdiction, { law: string; reference: s
   FI: { law: "729/2018", reference: "§ 1", single: "729/2018 § 1" },
   IT: { law: "Codice dell'amministrazione digitale", reference: "Art. 20", single: "Codice dell'amministrazione digitale Art. 20" },
   NL: { law: "Algemene wet bestuursrecht", reference: "Art. 1:1", single: "Algemene wet bestuursrecht Art. 1:1" },
+  DK: { law: "Forvaltningsloven", reference: "§ 1", single: "Forvaltningsloven § 1" },
 };
 
 function jurisdictionPlaceholder(template: string, example: string): string {

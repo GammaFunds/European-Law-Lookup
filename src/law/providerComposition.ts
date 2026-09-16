@@ -26,6 +26,7 @@ const PROVIDER_IDS_BY_JURISDICTION = {
   FI: ["finlex"],
   IT: ["normattiva"],
   NL: ["bwb"],
+  DK: [],
 } as const;
 
 export function providersForReference(providers: readonly LawProvider[], reference: LawReference): LawProvider[] {
