@@ -453,10 +453,12 @@ export class LawLookupModal extends Modal {
         return;
       }
 
-      const suggestions: LawMetadataSuggestion[] = result.entries.slice(0, 8).map((entry) => ({
-        ...entry,
-        matchKind: "title-contains",
-      }));
+      const suggestions = searchLawMetadata({
+        query,
+        jurisdiction: this.selectedJurisdiction,
+        entries: result.entries,
+        limit: 8,
+      });
       if (suggestions.length === 0) {
         this.renderDiscoveryStatus(provider, "no-results");
         return;

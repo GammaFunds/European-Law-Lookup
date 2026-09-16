@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { BoeLawDiscoveryMalformedResponseError } from "../src/law/providers/BoeLawDiscovery";
 
-type Jurisdiction = "DE" | "AT" | "CH" | "EU" | "ES";
+type Jurisdiction = "DE" | "AT" | "CH" | "EU" | "ES" | "FI" | "IT" | "NL";
 type EuDocumentType = "R" | "L" | "D";
 type MatchKind = "exact-alias" | "title-prefix" | "title-contains" | "eu-technical";
 
@@ -249,6 +249,18 @@ describe("law metadata autocomplete", () => {
     const results = searchLawMetadata({ query: "42", jurisdiction: "EU", entries });
     assert.deepEqual(results.map((entry) => entry.canonicalInput), ["ALIAS", "PREFIX", "CONTAINS", "TECH"]);
     assert.deepEqual(results.map((entry) => entry.matchKind), ["exact-alias", "title-prefix", "title-contains", "eu-technical"]);
+  });
+
+  it("ranks exact normalized title ahead of title-contains variants", () => {
+    const entries: SearchEntry[] = [
+      { jurisdiction: "NL", canonicalInput: "BWBR0008120", title: "Derde tranche Algemene wet bestuursrecht" },
+      { jurisdiction: "NL", canonicalInput: "BWBR0026016", title: "Vierde tranche Algemene wet bestuursrecht" },
+      { jurisdiction: "NL", canonicalInput: "BWBR0005537", title: "Algemene wet bestuursrecht" },
+    ];
+    const results = searchLawMetadata({ query: "Algemene wet bestuursrecht", jurisdiction: "NL", entries });
+    assert.equal(results.length, 3);
+    assert.equal(results[0].canonicalInput, "BWBR0005537");
+    assert.equal(results[0].matchKind, "title-prefix");
   });
 
   it("caps results at eight suggestions by default", () => {
@@ -623,7 +635,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
     await new Promise<void>((resolve) => setTimeout(resolve, 300));
 
@@ -641,7 +653,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Law";
     harness.inputEl.fire("input");
     await new Promise<void>((resolve) => setTimeout(resolve, 300));
 
@@ -654,7 +666,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       search: () => new Promise((resolve) => { resolvePending = resolve; }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
 
     assert.equal(loadingIndicatorFor(harness.formEl), undefined);
@@ -676,7 +688,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       search: () => new Promise((resolve) => { resolvePending = resolve; }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
     await waitForBoeDiscovery();
     resolvePending({ kind: "results", entries: [boeEntry("Found law")] });
@@ -692,7 +704,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       search: () => new Promise((resolve) => { resolvePending = resolve; }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
     await waitForBoeDiscovery();
     resolvePending({ kind: "no-results" });
@@ -709,7 +721,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       search: () => new Promise((_resolve, reject) => { rejectPending = reject; }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
     await waitForBoeDiscovery();
     rejectPending(new Error("source unavailable"));
@@ -726,7 +738,7 @@ describe("LawLookupModal metadata autocomplete integration", () => {
       search: () => new Promise((_resolve, reject) => { rejectPending = reject; }),
     };
     const harness = buildAutocompleteModalHarness("ES", "single", "EU", discoveryProvider);
-    harness.inputEl.value = "regimen";
+    harness.inputEl.value = "Ley 40";
     harness.inputEl.fire("input");
     await waitForBoeDiscovery();
     rejectPending(new BoeLawDiscoveryMalformedResponseError("malformed response"));
