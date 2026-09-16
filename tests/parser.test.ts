@@ -3,6 +3,13 @@ import { describe, it } from "node:test";
 import { parseLawReference, parseLawReferenceWithSelectedJurisdiction } from "../src/parser";
 
 describe("parseLawReference", () => {
+  it("parses explicit Netherlands BWB Article references only in NL", () => {
+    for (const input of ["BWBR0005537 Art. 1:1", "Art. 1:1 BWBR0005537", "BWBR0005537 Artikel 1:1"]) {
+      assert.deepEqual(parseLawReferenceWithSelectedJurisdiction(input, "NL"), { lawCode: "BWBR0005537", section: "1:1", referenceType: "article", jurisdiction: "NL" });
+    }
+    for (const input of ["BWBR0005537 Art. 1:1 lid 2", "Art. 1:1 lid 2 BWBR0005537", "BWBR000553 Art. 1:1"]) assert.equal(parseLawReferenceWithSelectedJurisdiction(input, "NL"), null);
+    assert.equal(parseLawReferenceWithSelectedJurisdiction("BWBR0005537 Art. 1:1", "DE"), null);
+  });
   it("parses strict Normattiva Article identities only for IT", () => {
     for (const input of [
       "normattiva:2005-05-16:005G0104 Art. 20",

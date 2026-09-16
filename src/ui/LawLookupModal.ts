@@ -68,7 +68,7 @@ function uiText(ui: UiStrings, key: keyof UiStrings): string {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" || value === "NL" ? value : "EU";
 }
 
 const JURISDICTION_LABEL_KEYS = [
@@ -78,6 +78,7 @@ const JURISDICTION_LABEL_KEYS = [
   "jurisdictionSpain",
   "jurisdictionFinland",
   "jurisdictionItaly",
+  "jurisdictionNetherlands",
   "jurisdictionEuropeanUnion",
 ] as const;
 
@@ -119,6 +120,21 @@ export function decomposeOneLineLookupInput(
 
 export interface LawLookupModalIndexProvider {
   getEuActIndex(): EuActIndex | null;
+}
+
+const JURISDICTION_EXAMPLES: Record<LawJurisdiction, { law: string; reference: string; single: string }> = {
+  EU: { law: "GDPR", reference: "Art. 6", single: "GDPR Art. 6" },
+  DE: { law: "BGB", reference: "§ 823", single: "§ 823 BGB" },
+  AT: { law: "ABGB", reference: "§ 1295", single: "§ 1295 ABGB" },
+  CH: { law: "OR", reference: "Art. 41", single: "Art. 41 OR" },
+  ES: { law: "BOE-A-2015-10566", reference: "Art. 1", single: "BOE-A-2015-10566 Art. 1" },
+  FI: { law: "729/2018", reference: "§ 1", single: "729/2018 § 1" },
+  IT: { law: "Codice dell'amministrazione digitale", reference: "Art. 20", single: "Codice dell'amministrazione digitale Art. 20" },
+  NL: { law: "Algemene wet bestuursrecht", reference: "Art. 1:1", single: "Algemene wet bestuursrecht Art. 1:1" },
+};
+
+function jurisdictionPlaceholder(template: string, example: string): string {
+  return template.replace("{example}", example);
 }
 
 const EU_ALIASES_BY_CELEX = buildEuAliasesByCelex();
@@ -181,8 +197,8 @@ export class LawLookupModal extends Modal {
     const formEl = contentEl.createDiv({ cls: "de-law-lookup-form" });
     this.formEl = formEl;
     this.inputLayout = normalizeInputLayout(this.settingsStore.getInputLayout?.());
-    this.renderInputControls();
     this.selectedJurisdiction = normalizeJurisdiction(this.settingsStore.getDefaultJurisdiction?.());
+    this.renderInputControls();
 
     const jurisdictionSelect = formEl.createEl("select", {
       cls: "de-law-jurisdiction-select",
@@ -196,6 +212,7 @@ export class LawLookupModal extends Modal {
       { code: "ES", label: this.ui.jurisdictionSpain },
       { code: "FI", label: this.ui.jurisdictionFinland ?? "Finland" },
       { code: "IT", label: this.ui.jurisdictionItaly! },
+      { code: "NL", label: this.ui.jurisdictionNetherlands ?? "Netherlands" },
     ];
     const euOption = jurisdictionOptions.find((option) => option.code === "EU")!;
     const collator = new Intl.Collator(uiLocaleForStrings(this.ui), { sensitivity: "base" });
@@ -223,6 +240,7 @@ export class LawLookupModal extends Modal {
       } else {
         this.inputEl.value = "";
       }
+      this.updatePlaceholders();
       this.renderSelectedLawStatus();
       this.renderResultMessage(this.ui.noLookupRunYet);
       this.renderActions();
@@ -297,8 +315,8 @@ export class LawLookupModal extends Modal {
     this.clearExplicitLookupLoading();
     const visibleLookupInput = this.lookupInputValue();
     const parsedReference = parseLawReferenceWithSelectedJurisdiction(
-      this.selectedJurisdiction === "IT" && this.selectedLaw
-        ? this.lookupInputWithSelectedItalyIdentity(visibleLookupInput)
+      (this.selectedJurisdiction === "IT" || this.selectedJurisdiction === "NL") && this.selectedLaw
+        ? this.lookupInputWithSelectedLawIdentity(visibleLookupInput)
         : visibleLookupInput,
       this.selectedJurisdiction,
       this.indexProvider.getEuActIndex(),
@@ -320,7 +338,9 @@ export class LawLookupModal extends Modal {
           ? { ...parsedReference, language: this.selectedFiLanguage === "fi" ? "fin" : "swe" }
           : this.selectedJurisdiction === "IT"
             ? { ...parsedReference, language: "it", normattivaAct: this.selectedLaw?.normattivaAct }
-        : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
+            : this.selectedJurisdiction === "NL"
+              ? parsedReference
+              : { ...parsedReference, sourceVariant: this.selectedSourceVariant };
 
     this.renderResultMessage(this.ui.lookingUpLaw);
     this.renderExplicitLookupLoading(lookupId);
@@ -449,10 +469,12 @@ export class LawLookupModal extends Modal {
         return;
       }
 
-      const suggestions: LawMetadataSuggestion[] = result.entries.slice(0, 8).map((entry) => ({
-        ...entry,
-        matchKind: "title-contains",
-      }));
+      const suggestions = searchLawMetadata({
+        query,
+        jurisdiction: this.selectedJurisdiction,
+        entries: result.entries,
+        limit: 8,
+      });
       if (suggestions.length === 0) {
         this.renderDiscoveryStatus(provider, "no-results");
         return;
@@ -493,7 +515,9 @@ export class LawLookupModal extends Modal {
         text: this.metadataSuggestionLabel(suggestion),
       });
       button.addEventListener("click", () => {
-        const displayedLaw = suggestion.jurisdiction === "IT" ? suggestion.title : suggestion.canonicalInput;
+        const displayedLaw = suggestion.jurisdiction === "IT" || suggestion.jurisdiction === "NL"
+          ? suggestion.title
+          : suggestion.canonicalInput;
         if (this.inputLayout === "split") {
           this.lawInputEl.value = displayedLaw;
         } else {
@@ -559,20 +583,49 @@ export class LawLookupModal extends Modal {
 
   private inputStillHasSelectedLawPrefix(): boolean {
     if (!this.selectedLaw) return false;
-    const displayedLaw = this.selectedLaw.jurisdiction === "IT" ? this.selectedLaw.title : this.selectedLaw.canonicalInput;
+    const displayedLaw = this.selectedLaw.jurisdiction === "IT" || this.selectedLaw.jurisdiction === "NL"
+      ? this.selectedLaw.title
+      : this.selectedLaw.canonicalInput;
     if (this.inputLayout === "split") return this.lawInputEl.value.trim() === displayedLaw.trim();
     return this.inputEl.value.startsWith(`${displayedLaw} `);
   }
 
-  private lookupInputWithSelectedItalyIdentity(input: string): string {
+  private lookupInputWithSelectedLawIdentity(input: string): string {
     if (!this.selectedLaw) return input;
-    const decomposed = decomposeOneLineLookupInput(input, "IT");
+    const decomposed = decomposeOneLineLookupInput(input, this.selectedJurisdiction);
     return decomposed
       ? composeSplitLookupInput(this.selectedLaw.canonicalInput, decomposed.reference)
       : input;
   }
 
+  private jurisdictionPlaceholder(example: string): string {
+    return jurisdictionPlaceholder(this.ui.lawReferencePlaceholder, example);
+  }
+
+  private updatePlaceholders(): void {
+    const examples = JURISDICTION_EXAMPLES[this.selectedJurisdiction];
+    if (this.inputLayout === "split") {
+      if (this.lawInputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.law);
+        if (typeof this.lawInputEl.setAttribute === "function") this.lawInputEl.setAttribute("placeholder", ph);
+        else this.lawInputEl.placeholder = ph;
+      }
+      if (this.referenceInputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.reference);
+        if (typeof this.referenceInputEl.setAttribute === "function") this.referenceInputEl.setAttribute("placeholder", ph);
+        else this.referenceInputEl.placeholder = ph;
+      }
+    } else {
+      if (this.inputEl) {
+        const ph = this.jurisdictionPlaceholder(examples.single);
+        if (typeof this.inputEl.setAttribute === "function") this.inputEl.setAttribute("placeholder", ph);
+        else this.inputEl.placeholder = ph;
+      }
+    }
+  }
+
   private renderInputControls(law = "", reference = "", singleValue = ""): void {
+    const examples = JURISDICTION_EXAMPLES[this.selectedJurisdiction];
     if (this.inputLayout === "split") {
       const lawId = `de-law-law-input-${++nextInputId}`;
       const referenceId = `de-law-reference-input-${++nextInputId}`;
@@ -581,7 +634,7 @@ export class LawLookupModal extends Modal {
         type: "text",
         cls: "de-law-law-input",
         value: law,
-        placeholder: this.ui.lawReferencePlaceholder,
+        placeholder: this.jurisdictionPlaceholder(examples.law),
         attr: { id: lawId, "aria-label": this.ui.lawLegalAct },
       });
       const referenceLabel = this.formEl.createEl("label", { text: this.ui.referenceInput, attr: { for: referenceId } });
@@ -589,7 +642,7 @@ export class LawLookupModal extends Modal {
         type: "text",
         cls: "de-law-reference-input",
         value: reference,
-        placeholder: this.ui.articleReferences,
+        placeholder: this.jurisdictionPlaceholder(examples.reference),
         attr: { id: referenceId, "aria-label": this.ui.referenceInput },
       });
       this.inputLabels = [lawLabel, referenceLabel];
@@ -610,7 +663,7 @@ export class LawLookupModal extends Modal {
       const input = this.formEl.createEl("input", {
         type: "text",
         value: singleValue,
-        placeholder: this.ui.lawReferencePlaceholder,
+        placeholder: this.jurisdictionPlaceholder(examples.single),
       });
       this.inputLabels = [];
       this.inputElements = [input];

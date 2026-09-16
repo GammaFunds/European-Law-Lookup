@@ -447,4 +447,39 @@ describe("formatLawSectionAsMarkdown", () => {
 
     assert.doesNotMatch(markdown, /CELEX:/);
   });
+
+  it("uses the source-backed NL law title instead of the BWBR identifier in heading and metadata", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "bwb",
+      providerLabel: "BWB / Wetten.nl",
+      lawCode: "BWBR0005537",
+      lawTitle: "Algemene wet bestuursrecht",
+      section: "1:1",
+      referenceType: "article",
+      jurisdiction: "NL",
+      language: "nl",
+      text: "Deze wet verstaat onder bestuursorgaan:",
+      retrievedAt: "2026-09-14T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.match(markdown, /> \*\*Art\. 1:1 Algemene wet bestuursrecht\*\*/);
+    assert.doesNotMatch(markdown, /Art\. Artikel/);
+    assert.doesNotMatch(markdown, /BWBR0005537/);
+    assert.match(markdown, /Quelle: BWB \/ Wetten\.nl, Algemene wet bestuursrecht, Art\. 1:1/);
+  });
+
+  it("fails closed when an NL source-backed law title is absent", () => {
+    const markdown = formatLawSectionAsMarkdown({
+      providerId: "bwb", providerLabel: "BWB / Wetten.nl", lawCode: "BWBR0005537", lawTitle: "",
+      section: "1:1", referenceType: "article", jurisdiction: "NL", language: "nl",
+      text: "Article body.", retrievedAt: "2026-09-14T12:00:00.000Z",
+      cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: false,
+    });
+
+    assert.match(markdown, /> \*\*Art\. 1:1\*\*/);
+    assert.doesNotMatch(markdown, /BWBR0005537/);
+  });
 });

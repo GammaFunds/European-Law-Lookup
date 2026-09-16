@@ -405,4 +405,38 @@ describe("lawSectionPreview", () => {
 
     assert.ok(!preview.metadataLines.some((l) => l.includes("CELEX")));
   });
+
+  it("uses the source-backed NL law title instead of the BWBR identifier in preview", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "bwb",
+      providerLabel: "BWB / Wetten.nl",
+      lawCode: "BWBR0005537",
+      lawTitle: "Algemene wet bestuursrecht",
+      section: "1:1",
+      referenceType: "article",
+      jurisdiction: "NL",
+      language: "nl",
+      text: "Deze wet verstaat onder bestuursorgaan:",
+      retrievedAt: "2026-09-14T12:00:00.000Z",
+      cacheStatus: "live",
+      isOfficialSource: true,
+      isAuthoritativeText: false,
+    });
+
+    assert.equal(preview.title, "Art. 1:1 Algemene wet bestuursrecht");
+    assert.doesNotMatch(preview.title, /Art\. Artikel/);
+    assert.doesNotMatch(preview.title, /BWBR0005537/);
+  });
+
+  it("fails closed when an NL source-backed law title is absent in preview", () => {
+    const preview = buildLawSectionPreviewModel({
+      providerId: "bwb", providerLabel: "BWB / Wetten.nl", lawCode: "BWBR0005537", lawTitle: "",
+      section: "1:1", referenceType: "article", jurisdiction: "NL", language: "nl",
+      text: "Article body.", retrievedAt: "2026-09-14T12:00:00.000Z",
+      cacheStatus: "live", isOfficialSource: true, isAuthoritativeText: false,
+    });
+
+    assert.equal(preview.title, "Art. 1:1");
+    assert.equal(preview.metadataLines.some((line) => line.includes("BWBR0005537")), false);
+  });
 });

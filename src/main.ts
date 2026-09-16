@@ -32,6 +32,7 @@ import { getSupportedBoeLaws } from "./law/providers/boeMapping";
 import { BoeLawDiscovery } from "./law/providers/BoeLawDiscovery";
 import { FinlexLawDiscovery } from "./law/providers/FinlexLawDiscovery";
 import { NormattivaLawDiscovery } from "./law/providers/NormattivaLawDiscovery";
+import { BwbLawDiscovery } from "./law/providers/BwbLawDiscovery";
 import type { LawDiscoveryProvider } from "./law/LawDiscovery";
 import {
   normalizeFedlexLanguage,
@@ -176,6 +177,7 @@ export default class DeLawPlugin extends Plugin {
             ["ES", new BoeLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
             ["FI", new FinlexLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
             ["IT", new NormattivaLawDiscovery(createObsidianRequestUrlPostTransport(requestUrl))],
+            ["NL", new BwbLawDiscovery(createObsidianRequestUrlTransport(requestUrl))],
           ]),
         );
         this.activeLawLookupModal = modal;
@@ -490,6 +492,7 @@ class DeLawSettingsTab extends PluginSettingTab {
             ES: ui.jurisdictionSpain,
             FI: ui.jurisdictionFinland ?? "Finland",
             IT: ui.jurisdictionItaly!,
+            NL: ui.jurisdictionNetherlands ?? "Netherlands",
           },
         },
       },
@@ -812,5 +815,5 @@ function normalizeTtlDays(value: unknown): number | null {
 }
 
 function normalizeJurisdiction(value: unknown): LawJurisdiction {
-  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" ? value : "EU";
+  return value === "DE" || value === "AT" || value === "CH" || value === "EU" || value === "ES" || value === "FI" || value === "IT" || value === "NL" ? value : "EU";
 }
