@@ -2,6 +2,7 @@
 
 **Task:** ELL-DK-ARCHITECTURE-DESIGN-SPEC-1  
 **Date:** 2026-09-16  
+**Last Updated:** 2026-09-16 (Q1–Q4 Resolved)<br>
 **Classification:** Architectural  
 **Status:** Approved  
 **Repository:** obsidian-de-law  
@@ -178,15 +179,25 @@ This section defines the precise semantics of legal-time state for DK in v1.
 
 8. **Ambiguous or unverifiable currentness fails closed.** If the system cannot determine whether a given LBK reflects the complete current state, it must not claim currentness.
 
-### User-Facing Semantics
+### User-Facing Semantics *(Q3 Resolved)*
 
-The UI must convey:
+The UI must convey the following semantic states:
 
-- **"Official consolidated text"** — the text is from an official source.
-- **"Latest official consolidation"** — only shown when source-backed lineage proves this LBK is the latest consolidation for that law. Until proven, show only the concrete document's consolidation/publication date without "latest" claim.
-- **"Later amendments may not be incorporated"** — this is a factual caveat when the system cannot guarantee complete currentness, supported by LexDania XML `<Change>` relations (not Atom sync signals alone).
+- **Normal concrete LBK document:**
+  "Official consolidated text dated {date}."
 
-The UI must **not** use wording that implies a guaranteed fully current statute when that has not been established.
+- **Fresh source-backed LexDania `<Change>` evidence establishes later amendments:**
+  "Later amendments are recorded and may not be incorporated in this consolidation."
+
+- **Currentness evidence is unavailable or stale:**
+  "Currentness information could not be verified."
+
+Rules:
+
+- No "latest" wording in v1 unless Q5 is later resolved with source-backed same-law/version lineage.
+- Atom synchronization signals alone never trigger the amendment warning.
+- Warning text may be localized, but semantic meaning must remain equivalent.
+- Immutable document facts remain displayable even when currentness evidence is unavailable.
 
 A "Gå til seneste LBK" (go to latest LBK) version-lineage resolution feature is deferred until source-backed mechanics are established. This remains an open question (see Section 21, Q5).
 
@@ -332,7 +343,8 @@ Serve autocomplete locally with zero network requests per keystroke. The `LawLoo
 | `accessionNumber` | Accession number (source-backed alias) |
 | `ministry` | Originating ministry/agency |
 | `announcedIn` | Publication reference |
-| `sourceUpdateTimestamp` | When the index entry was last updated from source |
+| `sourceUpdateTimestamp` | When the index entry was last refreshed/observed from source |
+| `sitemapLastModified` | Exact `lastmod` observation from the official ELI sitemap entry; used only for source synchronization/reconciliation decisions; not a legal-effective date; not a currentness conclusion; not equivalent to `sourceUpdateTimestamp` |
 
 ### Index Key
 
@@ -374,15 +386,30 @@ Enumerate all canonical ELI resources from the official Retsinformation ELI site
   3. Enumerate canonical ELI identities from the page entries
 - **Constraint:** The sitemap pages may not contain sufficient title metadata directly
 
-**Phase 2: Metadata Acquisition**
+**Phase 2: Metadata Acquisition** *(Q1 Resolved)*
 
-For each enumerated ELI entry, obtain required title/metadata from official source-backed metadata.
+For each enumerated ELI entry, obtain required title/metadata from the selected official per-ELI JSON-LD metadata representation.
 
-Candidate official metadata sources (to be validated during implementation):
+**Selected source:** `https://www.retsinformation.dk/eli/{pubMedia}/{year}/{number}.json`
 
-- LexDania XML metadata header of each document
-- Harvest API metadata (if metadata can be obtained within rate constraints)
-- ELI Atom feed entries (only if sitemap entries appear in the feed)
+- Content-Type: `application/ld+json`
+- Official Retsinformation ELI JSON-LD representation
+- Metadata-only; no legal body text returned
+- One request per canonical ELI identity
+- **Required bootstrap identity/title metadata:** `@id`, `eli:title`, `eli:type_document`; publication identity derivable/validated from canonical ELI (`pubMedia`/`year`/`number`).
+- **Optional metadata consumed when present:** `eli:title_alternative`, `eli:responsibility_of`, `eli:in_force`, `eli:id_local`, `eli:changed_by`, `eli:consolidates`, and other source-backed metadata explicitly modeled by the index.
+- Optional metadata absence must not invalidate an otherwise valid bootstrap entry unless that field is required by the final index schema.
+- Do not invent missing optional values. Nullable/optional fields remain nullable.
+- No source-field semantics may be upgraded beyond what the official source establishes.
+- May additionally contain relations (`changed_by`, `consolidates`, `basis_for`)
+
+Rejected alternatives (with rationale):
+
+- **LexDania XML (`/xml`)** — contains full legal body text (~97 KB vs ~60 KB); heavier than necessary for metadata-only bootstrap.
+- **Harvest API** — bounded 10-day lookback; does not return document titles; unsuitable for complete initial bootstrap.
+- **ELI Atom feed** — bounded 60-day retention; cannot bootstrap full historical index.
+
+The sitemap itself remains enumeration-only (URL + `lastmod`; no title/type/status metadata).
 
 **Phase 3: Canonical Identity Validation**
 
@@ -410,13 +437,19 @@ Persist the index atomically:
 - Atomically rename/move to the active index file
 - Only after successful activation, mark bootstrap as complete
 
-### Concurrency and Rate Constraints
+### Concurrency and Rate Constraints *(Q2 Resolved)*
 
-- The harvest API has a documented constraint of **1 request per 10 seconds**. If any bootstrap step uses the harvest API, this rate limit must be respected explicitly.
-- LexDania XML retrieval may have undocumented rate limits. Bootstrap must use bounded source access with explicit backoff.
-- The sitemap enumeration involves multiple requests (index + 21 pages) and requires bounded concurrency.
-- Concurrency and rate parameters must be determined only after Q2 (LexDania XML operational constraints) is resolved during implementation.
-- No aggressive crawler; conservative access patterns only.
+- The Harvest API has a documented constraint of **1 request per 10 seconds**. This limit applies **only** to the `/v1/Documents` synchronization endpoint and MUST NOT be transferred to the ELI representation endpoints without source evidence.
+- **No documented numeric rate limit** was found for the `.json` or `/xml` ELI representation endpoints. The absence of rate-limit headers is NOT permission for unlimited crawling.
+- Cloudflare was observed in the bounded probes and may be present on ELI representation requests (`cf-cache-status: DYNAMIC`).
+- Bootstrap must use **conservative sequential access** by default with:
+  - Explicit exponential backoff on errors
+  - Retry/stop appropriately on 429/503
+  - Honor `Retry-After` headers if present
+  - Resumable bootstrap (progress persisted)
+  - No aggressive crawling; no parallel bulk load
+- Concurrency may only be increased later with source-backed evidence of safe automated access.
+- The provider must NOT rely solely on HTTP Content-Type for the `/xml` endpoint. Valid LexDania XML may be returned with an incorrect `text/html` Content-Type. The provider must validate the response body structurally as LexDania XML and fail closed on malformed/non-LexDania content.
 
 ### Resumability
 
@@ -491,11 +524,28 @@ The Atom feed retains at least **60 days** of history. If the client misses upda
 - The system must perform a full reconciliation/bootstrap rather than guessing.
 - This is a controlled degradation, not an error state.
 
-### Refresh Cadence
+### Refresh Cadence *(Q4 Resolved)*
 
-- Daily incremental Atom refresh is a design recommendation (configurable, not user-facing).
-- Ordinary full-reconciliation cadence is unresolved (see Section 21, Q4).
-- Retention-gap recovery always triggers mandatory full reconciliation regardless of cadence.
+- **Incremental Atom refresh:** Eligible at most once per day. Perform when ≥24 hours since last successful incremental refresh. Do not perform unnecessary refreshes within the 24-hour window.
+- **Ordinary full reconciliation:** Monthly. Eligible when >31 days since last successful full reconciliation.
+- **Retention-gap recovery:** If the Atom history can no longer bridge the persisted watermark, trigger mandatory full reconciliation immediately. Do not guess or silently advance the watermark.
+
+### Full Reconciliation Algorithm
+
+When full reconciliation is triggered:
+
+1. Fetch the sitemap index.
+2. Fetch referenced sitemap pages.
+3. Compare canonical ELI identities + sitemap `lastmod` against local index entries.
+4. Identify:
+   - New ELI resources (present in sitemap but absent from local index)
+   - Changed ELI resources (sitemap `lastmod` differs from stored `sitemapLastModified`)
+   - Unchanged resources (identity + `lastmod` match — skip re-download)
+5. Fetch `.json` metadata **only** for new/changed ELI resources. Do NOT re-download every `.json` representation when identity + `lastmod` show no change.
+6. Validate candidate index.
+7. Atomically activate candidate.
+8. Persist the new `sitemapLastModified` value only after durable activation.
+9. `sitemapLastmod` must never be interpreted as substantive legal amendment evidence.
 
 ---
 
@@ -529,6 +579,7 @@ interface RetsinformationIndexEntry {
   ministry: string | null;
   announcedIn: string | null;
   sourceUpdateTimestamp: string | null;
+  sitemapLastModified: string | null;
 }
 ```
 
@@ -817,6 +868,8 @@ Do not expose:
 | Identity mismatch | Requested ELI does not returned ELI; expect fail-closed behavior |
 | Later-amendment metadata | Verify LexDania XML `<Change>` amendment metadata is surfaced correctly; Atom sync signals are not treated as amendment evidence |
 | ProviderUnavailableError on network failure | Network error produces `LawProviderUnavailableError`, not `null` |
+| `/xml` valid LexDania body accepted with `text/html` header | Valid LexDania XML response is accepted even when HTTP Content-Type is `text/html`; provider validates body structurally |
+| Malformed HTML/non-LexDania body rejected | Non-XML or non-LexDania response body is rejected; fail closed |
 
 ### Parser Tests
 
@@ -844,6 +897,19 @@ Do not expose:
 | Malformed state | Malformed index is rejected |
 | Schema mismatch | Old schema version is rejected; triggers rebuild |
 | Atomic activation | Partial writes do not become active |
+| JSON-LD bootstrap metadata parsing | `.json` response is parsed correctly; title, type, number, status extracted |
+| Sitemap lastmod unchanged → no refetch | When sitemap `lastmod` matches stored `sitemapLastModified`, `.json` is not re-fetched |
+| New ELI → `.json` metadata acquisition | Newly discovered ELI triggers `.json` fetch and metadata population |
+| Changed lastmod → `.json` metadata refresh | Changed `lastmod` triggers `.json` re-fetch and metadata update |
+| 24h incremental refresh eligibility | Incremental refresh performed only when ≥24 hours since last successful refresh |
+| ≤24h → no unnecessary incremental refresh | Refresh not performed within 24-hour window |
+| >31d full reconciliation eligibility | Full reconciliation triggered when >31 days since last reconciliation |
+| Atom retention gap → mandatory reconciliation | Watermark older than feed retention triggers immediate full reconciliation |
+| 429 → backoff/retry policy | HTTP 429 triggers exponential backoff and retry |
+| 503 → backoff/retry policy | HTTP 503 triggers exponential backoff and retry |
+| Retry-After honored | `Retry-After` header is respected before next request |
+| Stale currentness never produces fresh amendment assertion | Stale/unavailable currentness evidence does not trigger "later amendments" or "latest" claim |
+| Q5 unresolved → no latest-LBK claim | No "latest LBK" or "latest consolidation" claim when Q5 lineage is unproven |
 | Atom incremental refresh — existing ELI | Existing entry metadata is revalidated/updated |
 | Atom incremental refresh — new ELI | Newly observed ELI is acquired, validated, and added |
 | Atom replay/idempotence | Same Atom event reprocessed after crash produces identical index state; no duplicate entries |
@@ -914,6 +980,8 @@ No `LawReference` field addition is planned unless a later implementation inspec
 - § and stk. extraction is structurally correct
 - Fail-closed behavior on all error conditions
 - Metadata is surfaced for UI consumption
+- Valid LexDania XML accepted even with incorrect `text/html` Content-Type
+- Non-LexDania or malformed body rejected (fail closed)
 
 ### DK-C — Discovery Index Storage / Schema / Bootstrap Core
 
@@ -1048,53 +1116,59 @@ The following are explicitly excluded from v1 DK support:
 
 ## 21. Open Questions
 
-These are genuinely unresolved questions that must not be converted into assumptions.
+### ~~Q1: Exact Official Metadata Source for Full Bootstrap~~ — RESOLVED
 
-### Q1: Exact Official Metadata Source for Full Bootstrap
+**Resolution:** Per-ELI official JSON-LD metadata representation.
 
-During full bootstrap, the sitemap enumerates ELI entries but may not contain sufficient title metadata. The exact official metadata source to use for obtaining titles for every sitemap ELI entry must be determined during implementation.
+Bootstrap metadata is obtained from `https://www.retsinformation.dk/eli/{pubMedia}/{year}/{number}.json` (`application/ld+json`). This endpoint returns complete metadata (title, popular title, type, number, status, ministry, accession number) without legal body text. One request per canonical ELI identity is required.
 
-**Options under consideration:**
+The sitemap provides enumeration (URLs + `lastmod`). The Atom feed (60-day retention) and Harvest API (10-day lookback) are unsuitable for complete initial bootstrap.
 
-- LexDania XML metadata header (per-document fetch)
-- Harvest API metadata (`https://api.retsinformation.dk/v1/Documents`, 1 req/10 s, 10-day lookback, 03:00–23:45 window)
-- ELI Atom feed entries (bounded recent history, at least 60 days)
+LexDania XML (`/xml`) remains the legal-text source for the provider, not the bootstrap metadata source.
 
-The feasibility audit did not definitively resolve which source provides complete title metadata within rate constraints.
+### ~~Q2: Direct LexDania XML Operational Constraints~~ — RESOLVED
 
-### Q2: Direct LexDania XML Operational Constraints
+**Resolution:** Conservative access; no explicit numeric limit found for ELI representation endpoints.
 
-Whether direct LexDania XML access (`/eli/{pubMedia}/{year}/{number}/xml`) has an officially documented operational or rate constraint separate from the harvest API is unknown.
+No documented numeric rate limit was found for `/eli/.../xml` or `/eli/...json`. The Harvest API's 1-request/10-second limit applies only to `/v1/Documents` and must not be transferred to ELI representation endpoints without source evidence.
 
-**Risk:** Unbounded concurrent XML fetches during bootstrap could violate undocumented rate limits.
+Approved access model: conservative sequential access, exponential backoff, honor Retry-After, retry/stop on 429/503, resumable bootstrap, no aggressive crawling. Concurrency may only be increased with source-backed evidence.
 
-**Mitigation:** Use bounded source access with conservative backoff until constraints are empirically validated. Exact concurrency and rate parameters must be determined after this question is resolved.
+The provider must validate LexDania XML response bodies structurally and must not reject responses solely because of an incorrect HTTP Content-Type header (observed `text/html` for valid XML).
 
-### Q3: Exact User-Facing Wording for LBK vs. Amendment Warning
+### ~~Q3: Exact User-Facing Wording for LBK vs. Amendment Warning~~ — RESOLVED
 
-The precise wording for the legal-time warning UI must be finalized with the UI/UX layer. The warning must be supported by LexDania XML `<Change>` relations, not Atom sync signals alone.
+**Resolution:** Accepted legal-time wording contract (see Section 4, User-Facing Semantics).
 
-**Options under consideration:**
+- Normal LBK: "Official consolidated text dated {date}."
+- Later amendments recorded: "Later amendments are recorded and may not be incorporated in this consolidation."
+- Currentness unavailable: "Currentness information could not be verified."
+- No "latest" wording in v1 unless Q5 is resolved.
+- Atom sync signals alone never trigger amendment warning.
 
-- "Later amendments may exist"
-- "Consolidated as of [date]; later amendments may not be incorporated"
-- "This is the latest known consolidated text" (only when lineage is proven)
+### ~~Q4: Appropriate Full-Reconciliation Cadence~~ — RESOLVED
 
-### Q4: Appropriate Full-Reconciliation Cadence
+**Resolution:** Daily incremental / monthly full reconciliation / retention-gap recovery (see Section 9, Refresh Cadence).
 
-The recommended cadence for full reconciliation (sitemap vs. index comparison) is not determined.
+- Incremental Atom refresh: at most once per day (≥24 hours since last).
+- Full reconciliation: monthly (>31 days since last).
+- Retention-gap recovery: mandatory immediate full reconciliation.
+- Selective refetch: `.json` fetched only for new/changed ELI; unchanged entries skipped.
 
-**Options:**
-
-- Weekly (low overhead, acceptable staleness)
-- Monthly (lower overhead, higher staleness risk)
-- On startup if watermark is >7 days old (event-driven)
-
-### Q5: Official Same-Law / Version-Lineage Mechanism
+### Q5: Official Same-Law / Version-Lineage Mechanism — OPEN
 
 An official, source-backed mechanism to prove that a given LBK is the latest consolidation for a specific law (same-law lineage) has not been established. Without this mechanism, the system cannot claim "latest LBK" or implement a "Gå til seneste LBK" feature.
 
 **Status:** Unresolved. The sitemap and Atom feed alone do not establish same-law lineage. This must be resolved before any "latest" claim or version-lineage navigation is implemented.
+
+**v1 behavior while Q5 is unresolved:**
+
+- Concrete ELI identity only.
+- Publication/consolidation date may be shown.
+- No "latest" claim.
+- No automatic version-lineage navigation.
+
+**Q5 is NOT a blocker for v1 implementation.**
 
 ---
 
@@ -1111,6 +1185,13 @@ An official, source-backed mechanism to prove that a given LBK is the latest con
 | `DECISION_LANGUAGE` | `DA_ONLY` | Danish source text only; no machine translation |
 | `DECISION_UNOFFICIAL_API` | `REJECTED` | `retsinformation-api.dk` is unofficial; not source-backed |
 | `DECISION_IMPLEMENTATION_MODE` | `SLICED_TDD` | Six slices with independent acceptance boundaries; TDD throughout |
+| `DECISION_BOOTSTRAP_ENUMERATION` | `ELI_SITEMAP` | Canonical ELI identities enumerated from official sitemap index + 21 pages |
+| `DECISION_BOOTSTRAP_METADATA` | `PER_ELI_JSON_LD` | Per-ELI JSON-LD `.json` endpoint; metadata-only; no body text; lighter than XML |
+| `DECISION_BOOTSTRAP_ACCESS` | `CONSERVATIVE_SEQUENTIAL_RESUMABLE` | No documented numeric limit for ELI endpoints; conservative sequential with backoff |
+| `DECISION_INCREMENTAL_REFRESH` | `DAILY_24H` | Atom incremental refresh eligible at most once per day |
+| `DECISION_FULL_RECONCILIATION` | `MONTHLY_31D` | Full sitemap reconciliation monthly; selective refetch by lastmod |
+| `DECISION_RETENTION_GAP` | `MANDATORY_FULL_RECONCILIATION` | Watermark older than feed retention triggers immediate full reconciliation |
+| `DECISION_LATEST_LBK` | `DISABLED_UNTIL_SOURCE_BACKED_LINEAGE` | No "latest" claim in v1; Q5 must resolve same-law/version-lineage first |
 
 ---
 
