@@ -353,12 +353,14 @@ export interface RetsinformationCurrentnessRecorder {
 
 - [ ] In the test file, define `response(status, body, headers?)` returning a full `LawProviderHttpResponse` fake.
 - [ ] Write RED assertions for exact URL `https://www.retsinformation.dk/eli/lta/2014/433/xml`; 404 → `null`; network/retry exhaustion → `LawProviderUnavailableError`; malformed body → `null`; valid LexDania accepted even with `content-type: text/html`; missing §/stk. → `null`; success returns DK/da/official/authoritative `LawSection`.
-- [ ] Write identity RED: requested `/eli/lta/2014/433` with response `Year=2020` or `Number=999` returns `null` and records no observation. Validate request `pubMedia` against supported v1 promulgated LOV/LBK scope; do not invent an XML pubMedia field.
+- [ ] Write pubMedia admission RED: `/eli/lta/2014/433` is admitted to retrieval; a syntactically valid canonical ELI with non-`lta` `pubMedia` returns `null` with zero fetches; no XML `pubMedia` field is invented or parsed; LexDania `DocumentType` validation remains a separate check against supported `LOV`/`LOVH` and `LBK`/`LBKH` values.
+- [ ] Write identity RED: requested `/eli/lta/2014/433` with response `Year=2020` or `Number=999` returns `null` and records no observation. The request-side `pubMedia` gate is independent of response `DocumentType` validation.
 - [ ] Write recorder RED: successful verified retrieval records exactly one observation containing source status, document date and LexDania `<Change>` evidence; invalid/malformed/mismatched retrieval records none.
+- [ ] Write recorder-failure RED: a synchronous recorder throw and a rejected recorder Promise both leave an otherwise verified `LawSection` usable; neither is mapped to `LawProviderUnavailableError`, and neither yields a currentness-success claim.
 - [ ] Run RED with native compile + focused test.
 - [ ] Implement provider URL as `${origin}${identity.canonicalEli}/xml`; never append a second `/eli`.
-- [ ] Validate supported canonical identity, response year/number and supported source document type before reference extraction. Return `null` for structural/identity/reference absence; throw `LawProviderUnavailableError` only for provider/network unavailability.
-- [ ] Record currentness observation only after successful response identity validation and LexDania parse. Do not change `LawProvider` or `LawSection` types.
+- [ ] Validate supported canonical identity, request-side `pubMedia === "lta"`, response year/number and supported source `DocumentType` (`LOV`/`LOVH` or `LBK`/`LBKH`) before reference extraction. Return `null` for structural/identity/reference absence; throw `LawProviderUnavailableError` only for provider/network unavailability.
+- [ ] Record currentness observation only after successful response identity validation and LexDania parse. Treat synchronous or Promise recorder failure as ancillary best-effort failure: preserve the verified `LawSection`, leave currentness unavailable/unverified, make no currentness/amendment/latest-LBK claim, and do not change `LawProvider` or `LawSection` types.
 - [ ] Run GREEN for provider + LexDania + retry tests and relevant ProviderRegistry tests.
 - [ ] Run `npm run lint`, `git diff --check`.
 - [ ] Fresh review gate: currentness leaves the provider only via recorder; generic provider contract stays unchanged.

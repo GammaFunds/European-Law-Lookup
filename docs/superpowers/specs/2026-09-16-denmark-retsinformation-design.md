@@ -141,6 +141,19 @@ This is the verified fixture identity. Only use independently verified identitie
 | Serializable to string | ✓ |
 | Collision-resistant within supported scope | ✓ |
 
+### Provider Admission Contract
+
+`RetsinformationLawProvider` v1 admits only canonical ELI identities whose
+request-side `pubMedia` is exactly `"lta"`. A syntactically valid canonical ELI
+with any other `pubMedia` value fails closed before network retrieval. This is
+an independent request-identity gate: admitting `lta` does not imply that
+every `lta` document is supported.
+
+After retrieval, the LexDania `DocumentType` is validated independently against
+the approved v1 scope of `LOV`/`LOVH` and `LBK`/`LBKH`. The provider must not
+infer `DocumentType` from `pubMedia`, and it must not invent or parse an XML
+`pubMedia` field; `pubMedia` is taken from the canonical request identity.
+
 ### Excluded Identity Forms
 
 - **Title as identity** — titles are not stable; same law may have different popular titles.
@@ -178,6 +191,18 @@ This section defines the precise semantics of legal-time state for DK in v1.
 7. **Legal amendment metadata and synchronization/refresh metadata are distinct.** LexDania XML `<Change>` relations are source-backed legal/amendment relationships. Atom `reasonForChange`/`changeDate` values are source/update synchronization signals. Atom events alone MUST NOT be interpreted as proof of a legal amendment and MUST NOT independently trigger a "later amendments exist" claim. Only LexDania XML `<Change>` relations may support a legal-amendment assertion.
 
 8. **Ambiguous or unverifiable currentness fails closed.** If the system cannot determine whether a given LBK reflects the complete current state, it must not claim currentness.
+
+9. **Store-C recording is ancillary to immutable legal-text retrieval.** A
+   synchronous throw or rejected Promise from
+   `RetsinformationCurrentnessRecorder.record(...)` must not turn an otherwise
+   fully verified `LawSection` into an unavailable or not-found result, and it
+   must not be mapped to `LawProviderUnavailableError`.
+
+10. **Recorder failure does not establish currentness.** If recording fails,
+    the provider must not claim a successful currentness observation. Currentness
+    remains unavailable/unverified; immutable verified document facts and legal
+    text remain usable. The provider must not synthesize currentness, amendment
+    state, or latest-LBK state from the failed call.
 
 ### User-Facing Semantics *(Q3 Resolved)*
 
@@ -230,6 +255,12 @@ LexDania XML — the structured XML format published by the Danish legal informa
 7. **Surface** title and source metadata needed by the UI.
 8. **Surface** legal-time and amendment metadata needed by the UI.
 9. **Fail closed** on malformed or inconsistent XML.
+
+Recording the verified observation in Store C is ancillary to this retrieval.
+Recorder failure does not invalidate the verified legal text: the provider
+returns the `LawSection` while leaving currentness unavailable/unverified, does
+not claim a successful observation, and does not classify the recorder failure
+as provider/network unavailability.
 
 ### Provider Return Contract
 
