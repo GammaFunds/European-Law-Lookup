@@ -758,6 +758,32 @@ Greenland and Faroe Islands jurisdictional scope is **not** separately modeled i
 
 If Danish source text is requested and unavailable, the system fails closed. It does not silently fall back to another language.
 
+### DK Provider Language Admission Contract
+
+`RetsinformationLawProvider` admits `reference.language` values as follows:
+
+1. **Danish is the only DK v1 source language.** The sole supported source language for DK v1 is Danish. The official Retsinformation source text is Danish.
+2. **Missing `reference.language` is accepted.** `reference.language === undefined` is allowed and means the sole supported DK source language, Danish.
+3. **Explicit `"da"` is accepted.** `reference.language === "da"` is allowed.
+4. **Every other explicit `reference.language` fails closed.** Any explicit language value other than `"da"` must fail closed before network retrieval and before any currentness recorder call.
+5. **No unsupported explicit language may be silently fulfilled with Danish source text.** An unsupported explicit language must never return Danish source text labeled `"da"`. There is no silent fallback from an explicitly requested unsupported language to Danish.
+
+### DK Provider SourceVariant Admission Contract
+
+`RetsinformationLawProvider` admits `reference.sourceVariant` values as follows:
+
+6. **DK v1 defines no explicit `sourceVariant`.** There is no DK-specific `sourceVariant` value defined for v1.
+7. **Missing `reference.sourceVariant` is accepted.** `reference.sourceVariant === undefined` is allowed.
+8. **Every explicit `reference.sourceVariant` fails closed.** Any explicit `sourceVariant` value must fail closed before network retrieval and before any currentness recorder call. This includes `"translation-en"` — it must not return Danish text.
+9. **No DK `sourceVariant` may be synthesized.** The provider must not invent an `"official-da"` or any other DK variant to represent the ordinary Danish official source.
+
+### Successful DK LawSection Language and SourceVariant
+
+10. **Successful returned DK `LawSection` remains language `"da"`.** The returned `LawSection` carries `language: "da"`.
+11. **No invented `sourceVariant` is populated.** The returned `LawSection` carries no DK-specific `sourceVariant`.
+
+The normative boundary is: unsupported explicit `language` or `sourceVariant` => zero transport calls and zero recorder calls.
+
 ---
 
 ## 14. Failure Model
