@@ -122,7 +122,16 @@ import { describe, it } from "node:test";
 **Files:**
 - Modify: `src/law/types.ts`
 - Modify: `src/law/lawMetadataSearch.ts`
+- Modify: `src/law/providerComposition.ts`
+- Modify: `src/ui/LawLookupModal.ts`
 - Create/Test: `tests/dkTypes.test.ts`
+
+The provider-composition and modal changes are compile/exhaustiveness bridges
+required by the shared jurisdiction contracts, not activation of DK runtime
+behavior. `providerComposition` receives an inert fail-closed `DK: []` entry;
+Task 19 remains responsible for real DK provider registration. The
+`JURISDICTION_EXAMPLES` record receives the already-approved inert DK example
+only; Task 20 remains responsible for dropdown/UI exposure.
 
 **Interfaces:**
 - Produces: `LawJurisdiction` including `"DK"`.
@@ -140,11 +149,15 @@ void metadataJurisdiction;
 ```
 
 - [ ] Run RED: `rm -rf test-dist && npx tsc -p tsconfig.test.json`. Expected: `"DK"` is rejected by current unions.
-- [ ] Add `"DK"` to both unions and no other behavior.
+- [ ] Add `"DK"` to both unions, add the inert `DK: []` provider-composition
+  exhaustiveness bridge, and add the inert approved DK modal example; no
+  other behavior.
 - [ ] Run GREEN: `rm -rf test-dist && npx tsc -p tsconfig.test.json && node --test test-dist/tests/dkTypes.test.js`.
 - [ ] Run neighboring parser/i18n tests after compilation.
 - [ ] Run `npm run lint` and `git diff --check`.
-- [ ] Fresh review gate: exact two production unions + one test only.
+- [ ] Fresh review gate: corrected six-file scope only; verify the two
+  production unions, the inert provider-composition and modal compile bridges,
+  and the test, with no runtime DK activation or Task 2 leakage.
 - [ ] **Controller checkpoint: do not commit until explicit approval.**
 
 ### Task 2: Canonical ELI Identity Normalizer and Explicit DK Reference Parser
