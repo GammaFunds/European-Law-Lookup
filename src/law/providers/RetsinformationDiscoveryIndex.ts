@@ -30,6 +30,126 @@ export interface RetsinformationIndexEntry {
   sitemapLastModified: string | null;
 }
 
+const ELI_NAMESPACE = "http://data.europa.eu/eli/ontology#";
+const RETSINFORMATION_HOST = "https://www.retsinformation.dk";
+const TYPE_DOCUMENT_AUTHORITY = "http://www.retsinformation.dk/eli/resource/authority/type_document#";
+
+type JsonLdNode = Record<string, unknown>;
+
+function jsonLdNodes(raw: unknown): JsonLdNode[] | null {
+  if (Array.isArray(raw)) return raw.every(isRecord) ? raw.map((node) => node) : null;
+  if (!isRecord(raw)) return null;
+  const graph = raw["@graph"];
+  if (!Array.isArray(graph) || !graph.every(isRecord)) return null;
+  return graph.map((node) => node);
+}
+
+function jsonLdContext(raw: unknown): Record<string, unknown> {
+  return isRecord(raw) && isRecord(raw["@context"]) ? raw["@context"] : {};
+}
+
+function expandJsonLdTerm(value: unknown, context: Record<string, unknown>): string | null {
+  if (typeof value !== "string") return null;
+  if (value.startsWith(ELI_NAMESPACE)) return value;
+  const separator = value.indexOf(":");
+  if (separator < 1) return null;
+  const prefix = value.slice(0, separator);
+  const local = value.slice(separator + 1);
+  const definition = context[prefix];
+  const namespace = definition === ELI_NAMESPACE
+    ? definition
+    : isRecord(definition) && definition["@id"] === ELI_NAMESPACE ? definition["@id"] : null;
+  return namespace ? `${namespace}${local}` : null;
+}
+
+function jsonLdValues(node: JsonLdNode, property: string, context: Record<string, unknown>): unknown[] {
+  return Object.entries(node).flatMap(([key, value]) => {
+    if (key === property || expandJsonLdTerm(key, context) === property) {
+      return Array.isArray(value) ? value.map((item) => item as unknown) : [value];
+    }
+    return [];
+  });
+}
+
+function jsonLdStrings(node: JsonLdNode, property: string, context: Record<string, unknown>): string[] {
+  return jsonLdValues(node, property, context).flatMap((value) => {
+    if (typeof value === "string") return [value];
+    if (isRecord(value) && typeof value["@value"] === "string") return [value["@value"]];
+    return [];
+  });
+}
+
+function jsonLdIds(node: JsonLdNode, property: string, context: Record<string, unknown>): string[] {
+  return jsonLdValues(node, property, context).flatMap((value) => {
+    if (isRecord(value) && typeof value["@id"] === "string") return [value["@id"]];
+    if (typeof value === "string") return [value];
+    return [];
+  });
+}
+
+function hasJsonLdType(node: JsonLdNode, type: string, context: Record<string, unknown>): boolean {
+  const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+  return types.some((value) => expandJsonLdTerm(value, context) === type);
+}
+
+function oneString(values: string[]): string | null {
+  const unique = [...new Set(values.filter((value) => value.trim() !== ""))];
+  return unique.length === 1 ? unique[0] : null;
+}
+
+function oneId(values: string[]): string | null {
+  return oneString(values);
+}
+
+export function parseRetsinformationJsonLd(
+  json: unknown,
+  canonicalEli: string,
+  observedAt: string,
+): Omit<RetsinformationIndexEntry, "sitemapLastModified"> | null {
+  const identity = typeof canonicalEli === "string" ? parseDkCanonicalEli(canonicalEli) : null;
+  if (!identity || !observedAt.trim()) return null;
+
+  let raw: unknown;
+  try { raw = typeof json === "string" ? JSON.parse(json) : json; } catch { return null; }
+  const nodes = jsonLdNodes(raw);
+  if (!nodes) return null;
+  const context = jsonLdContext(raw);
+  const resourceId = `${RETSINFORMATION_HOST}${identity.canonicalEli}`;
+  const resources = nodes.filter((node) => node["@id"] === resourceId && hasJsonLdType(node, `${ELI_NAMESPACE}LegalResource`, context));
+  if (resources.length !== 1) return null;
+  const resource = resources[0];
+  const expressions = nodes.filter((node) => hasJsonLdType(node, `${ELI_NAMESPACE}LegalExpression`, context)
+    && jsonLdIds(node, `${ELI_NAMESPACE}realizes`, context).includes(resourceId));
+  if (expressions.length !== 1) return null;
+  const expression = expressions[0];
+
+  const documentTitle = oneString(jsonLdStrings(expression, `${ELI_NAMESPACE}title`, context));
+  const documentTypeId = oneId(jsonLdIds(resource, `${ELI_NAMESPACE}type_document`, context));
+  const sourceNumber = oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}number`, context));
+  if (!documentTitle || !documentTypeId || !documentTypeId.startsWith(TYPE_DOCUMENT_AUTHORITY)
+    || (sourceNumber !== null && sourceNumber !== identity.number)) return null;
+  const documentType = documentTypeId.slice(TYPE_DOCUMENT_AUTHORITY.length);
+  if (!documentType) return null;
+
+  return {
+    canonicalEli: identity.canonicalEli,
+    popularTitle: oneString(jsonLdStrings(expression, `${ELI_NAMESPACE}title_alternative`, context)),
+    documentTitle,
+    documentType,
+    pubMedia: identity.pubMedia,
+    year: identity.year,
+    number: identity.number,
+    status: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}in_force`, context)),
+    startDate: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}date_entry_in_force`, context)),
+    endDate: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}date_no_longer_in_force`, context)),
+    changeDate: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}date_document`, context)),
+    accessionNumber: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}id_local`, context)),
+    ministry: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}responsibility_of`, context)),
+    announcedIn: oneString(jsonLdStrings(resource, `${ELI_NAMESPACE}publication`, context)),
+    sourceUpdateTimestamp: observedAt,
+  };
+}
+
 const nullableIndexFields = [
   "lastSuccessfulRefresh",
   "lastSuccessfulIncrementalRefresh",
