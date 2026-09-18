@@ -154,6 +154,23 @@ the approved v1 scope of `LOV`/`LOVH` and `LBK`/`LBKH`. The provider must not
 infer `DocumentType` from `pubMedia`, and it must not invent or parse an XML
 `pubMedia` field; `pubMedia` is taken from the canonical request identity.
 
+### JSON-LD Source Identity Contract
+
+The per-ELI JSON-LD metadata endpoint uses two distinct origin authorities:
+
+| Origin | Purpose |
+|---|---|
+| **Retrieval origin** | `https://www.retsinformation.dk` — the host used to construct the metadata URL (`https://www.retsinformation.dk${canonicalEli}.json`) |
+| **Graph identity origin** | `https://retsinformation.dk` — the origin used in official JSON-LD `@id` values within the graph |
+
+For canonical input `canonicalEli=/eli/{pubMedia}/{year}/{number}`, the expected selected `LegalResource` `@id` is exactly:
+
+```
+https://retsinformation.dk${canonicalEli}
+```
+
+The parser must NOT normalize arbitrary hosts, accept foreign hosts, or silently rewrite URLs. The retrieval origin and graph identity origin are distinct and must not be conflated.
+
 ### Excluded Identity Forms
 
 - **Title as identity** — titles are not stable; same law may have different popular titles.
@@ -441,6 +458,101 @@ Rejected alternatives (with rationale):
 - **ELI Atom feed** — bounded 60-day retention; cannot bootstrap full historical index.
 
 The sitemap itself remains enumeration-only (URL + `lastmod`; no title/type/status metadata).
+
+### Task 8 Field Mapping Contract (JSON-LD → RetsinformationIndexEntry)
+
+The following exact v1 field mappings apply when parsing the per-ELI JSON-LD representation into an `RetsinformationIndexEntry`.
+
+**Identity and type:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `canonicalEli` | Parser input after `parseDkCanonicalEli` validation | Exact validated value |
+| `resourceId` | `@id` of selected `LegalResource` | Must equal `https://retsinformation.dk${canonicalEli}` |
+| `LegalResource @type` | `@type` of selected `LegalResource` | Must include `http://data.europa.eu/eli/ontology#LegalResource`; may be represented as a string or array of strings |
+| `LegalExpression @type` | `@type` of selected `LegalExpression` | Must include `http://data.europa.eu/eli/ontology#LegalExpression`; may be a string or array |
+| `LegalExpression realizes` | `eli:realizes` on the selected `LegalExpression` | Must reference the selected `LegalResource` exactly; the parser must accept both `@value` reference form and `@id` reference form; no fuzzy matching |
+
+**Title fields:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `popularTitle` | `eli:title_alternative` | Optional; trim outer whitespace; empty-after-trim => `null` |
+| `documentTitle` | `eli:title` | Required; trim outer whitespace; empty-after-trim => `null` / parser failure |
+
+**Document type:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `documentType` | `eli:type_document` `@id` | Required; extract the authority fragment (e.g., `LBKH`); do not infer document type from title |
+
+**Identity-derived fields (from `parseDkCanonicalEli`):**
+
+| Field | Source | Rule |
+|---|---|---|
+| `pubMedia` | `parseDkCanonicalEli(canonicalEli)` | Only from parser; canonical input |
+| `year` | `parseDkCanonicalEli(canonicalEli)` | Only from parser; canonical input |
+| `number` | `parseDkCanonicalEli(canonicalEli)` | Only from parser; if `eli:number` exists, its source value must match the parsed number; mismatch => `null` |
+
+**Status:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `status` | `eli:in_force` | Optional; if present and supplies exactly one source identifier, preserve the full source-defined identifier string (e.g., `http://data.europa.eu/eli/ontology#InForce-inForce`); DO NOT convert to boolean currentness; DO NOT shorten to `"inForce"`; malformed/ambiguous optional status representation => `null` rather than inference |
+
+**Optional source metadata:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `accessionNumber` | `eli:id_local` | Optional source string |
+| `ministry` | `eli:responsibility_of` | Optional source string |
+
+**Observation metadata:**
+
+| Field | Source | Rule |
+|---|---|---|
+| `sourceUpdateTimestamp` | The `observedAt` argument passed to `parseRetsinformationJsonLd` | Exact value; observation/synchronization metadata only |
+
+**Explicitly unmapped fields (Task 8 v1):**
+
+| Field | Value | Reason |
+|---|---|---|
+| `startDate` | `null` | The accepted contract has not established a source property with the exact semantics required |
+| `endDate` | `null` | The accepted contract has not established a source property with the exact semantics required |
+| `changeDate` | `null` | The accepted contract has not established a source property with the exact semantics required |
+| `announcedIn` | `null` | The accepted contract has not established a source property with the exact semantics required |
+
+**Non-mapping constraints:**
+
+- `eli:date_document` MUST NOT be mapped to `startDate` or `changeDate`
+- `eli:date_publication` MUST NOT be mapped to `announcedIn`
+- Absence of these mappings is deliberate fail-closed semantic restraint
+
+**Relations — recognition without field invention:**
+
+The official source may expose `eli:changed_by`, `eli:consolidates`, and `eli:basis_for`. Task 8 v1:
+
+- May recognize/parse their presence as source metadata
+- MUST NOT invent `RetsinformationIndexEntry` fields for them
+- MUST NOT encode them into unrelated fields
+- MUST NOT infer currentness from them
+- MUST NOT infer amendment truth from them
+- MUST NOT infer latest-LBK from them
+- MUST NOT infer same-law lineage from them
+- MUST NOT resolve Q5
+
+**JSON-LD normalization helpers:**
+
+| Helper | Contract |
+|---|---|
+| `jsonLdNodes(value)` | Normalize single value vs array; returns array of nodes |
+| `hasJsonLdType(node, typeUri)` | Accept `@type` represented as string or array of strings/reference-like values |
+| `jsonLdStrings(node, property)` | Extract primitive string and `@value` string forms; arrays supported; filter non-string values |
+| `jsonLdIds(node, property)` | Extract primitive string and `@id` string forms; arrays supported; filter invalid values |
+
+For relationship references such as `realizes`: match against the union of `jsonLdStrings(...)` and `jsonLdIds(...)`. Do not invent full RDF/JSON-LD expansion semantics.
+
+**Content type:** The official representation is JSON-LD with `application/ld+json`. This is the source contract. Do not encode a probe tool's inferred `application/json` as authoritative.
 
 **Phase 3: Canonical Identity Validation**
 

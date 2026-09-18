@@ -444,38 +444,78 @@ export interface RetsinformationIndexEntry {
 - Supports a top-level JSON-LD array or an object with `@graph`.
 - Uses official ELI namespace `http://data.europa.eu/eli/ontology#` and Retsinformation authority values.
 
-- [ ] Write failing fixture using exact official ontology URIs, not a guessed namespace:
+- [ ] Write failing fixture using exact official ontology URIs and the real graph identity origin (no `www`), not a guessed namespace:
 
 ```typescript
 const ELI = "http://data.europa.eu/eli/ontology#";
-const resourceId = "https://www.retsinformation.dk/eli/lta/2014/433";
+const RESOURCE_ID = "https://retsinformation.dk/eli/lta/2014/433";
+
+// Primary real-source-shaped fixture: top-level array, @value realizes
 const fixture = JSON.stringify([
   {
-    "@id": resourceId,
-    "@type": `${ELI}LegalResource`,
+    "@id": RESOURCE_ID,
+    "@type": [`${ELI}LegalResource`],
     [`${ELI}number`]: [{ "@value": "433" }],
     [`${ELI}type_document`]: [{ "@id": "http://www.retsinformation.dk/eli/resource/authority/type_document#LBKH" }],
     [`${ELI}responsibility_of`]: [{ "@value": "Justitsministeriet" }],
     [`${ELI}id_local`]: [{ "@value": "A20140043329" }],
   },
   {
-    "@id": `${resourceId}/dan`,
-    "@type": `${ELI}LegalExpression`,
-    [`${ELI}realizes`]: [{ "@id": resourceId }],
+    "@id": `${RESOURCE_ID}/dan`,
+    "@type": [`${ELI}LegalExpression`],
+    [`${ELI}realizes`]: [{ "@value": RESOURCE_ID }],
     [`${ELI}title`]: [{ "@value": "Bekendtgørelse af forvaltningsloven" }],
     [`${ELI}title_alternative`]: [{ "@value": "Forvaltningsloven" }],
   },
 ]);
+
+// Separate fixture: @id realizes reference form must also be accepted
+const fixtureIdRealizes = JSON.stringify([
+  {
+    "@id": RESOURCE_ID,
+    "@type": `${ELI}LegalResource`,
+    [`${ELI}number`]: [{ "@value": "433" }],
+    [`${ELI}type_document`]: [{ "@id": "http://www.retsinformation.dk/eli/resource/authority/type_document#LBKH" }],
+  },
+  {
+    "@id": `${RESOURCE_ID}/dan`,
+    "@type": `${ELI}LegalExpression`,
+    [`${ELI}realizes`]: [{ "@id": RESOURCE_ID }],
+    [`${ELI}title`]: [{ "@value": "Bekendtgørelse af forvaltningsloven" }],
+  },
+]);
 ```
 
-- [ ] Test required source identity/title/type; optional alternative title/responsibility/in-force/id-local/changed_by/consolidates absent without failure; mismatched resource `@id` returns `null`; missing title/type returns `null`; object `@graph` form works.
+- [ ] Test real-source-shaped top-level array form.
+- [ ] Test `@graph` object form containing the same graph nodes.
+- [ ] Test graph resource identity without `www` (exact `https://retsinformation.dk${canonicalEli}`).
+- [ ] Test resource `@type` array form and string form.
+- [ ] Test `LegalExpression` realizes via `@value` (primary real-source-shaped fixture).
+- [ ] Test `LegalExpression` realizes via `@id` (separate fixture proving both forms accepted).
+- [ ] Test mismatched resource `@id` returns `null`.
+- [ ] Test missing title returns `null`.
+- [ ] Test whitespace/CRLF-trimmed official title is accepted.
+- [ ] Test missing `type_document` returns `null`.
+- [ ] Test source number mismatch returns `null`.
+- [ ] Test canonical `pubMedia`/`year`/`number` cannot be overridden by source values.
+- [ ] Test optional `title_alternative` absent => `null`.
+- [ ] Test optional `responsibility_of` absent => `null`.
+- [ ] Test optional `id_local` absent => `null`.
+- [ ] Test optional `in_force` absent => `null`.
+- [ ] Test `in_force` full source identifier preserved as `status` (e.g., `http://data.europa.eu/eli/ontology#InForce-inForce`).
+- [ ] Test `observedAt` copied to `sourceUpdateTimestamp`.
+- [ ] Test `startDate`/`endDate`/`changeDate`/`announcedIn` remain `null` in Task 8 v1.
+- [ ] Test `date_document` is NOT mapped to `startDate` or `changeDate`.
+- [ ] Test `date_publication` is NOT mapped to `announcedIn`.
+- [ ] Test `changed_by`/`consolidates` presence creates no currentness/latest-LBK/lineage output.
+- [ ] Test malformed top-level shape returns `null`.
 - [ ] Run RED.
-- [ ] Implement helpers `jsonLdNodes`, `hasJsonLdType`, `jsonLdStrings`, `jsonLdIds` to normalize primitive/array/`@value`/`@id` representations.
-- [ ] Select the `LegalResource` whose `@id` equals `https://www.retsinformation.dk${canonicalEli}` and a `LegalExpression` whose `realizes` references that resource. Derive pubMedia/year/number only from `parseDkCanonicalEli(canonicalEli)` and cross-check source number when present.
-- [ ] Map optional source metadata only when present. ELI relations stay discovery/source metadata, not Store C amendment evidence.
+- [ ] Implement helpers `jsonLdNodes`, `hasJsonLdType`, `jsonLdStrings`, `jsonLdIds` to normalize primitive/array/`@value`/`@id` representations. For relationship references such as `realizes`, match against the union of `jsonLdStrings(...)` and `jsonLdIds(...)`.
+- [ ] Select the `LegalResource` whose `@id` equals `https://retsinformation.dk${canonicalEli}` (graph identity origin, no `www`) and a `LegalExpression` whose `realizes` references that resource exactly. Accept both `@value` and `@id` reference forms for `realizes`.
+- [ ] Map fields per the Task 8 field mapping contract in the design spec. Derive `pubMedia`/`year`/`number` only from `parseDkCanonicalEli(canonicalEli)` and cross-check source number when present. Map `eli:in_force` full source identifier to `status`. Set `startDate`, `endDate`, `changeDate`, `announcedIn` to `null`. `eli:date_document` is NOT mapped to `startDate`/`changeDate`; `eli:date_publication` is NOT mapped to `announcedIn`. Recognize `eli:changed_by`/`eli:consolidates`/`eli:basis_for` as source metadata without inventing `RetsinformationIndexEntry` fields.
 - [ ] Run GREEN for JSON-LD tests.
 - [ ] Run `npm run lint`, `git diff --check`.
-- [ ] Fresh review gate: no fabricated namespace, no duplicated `/eli` path segment, optional fields remain nullable.
+- [ ] Fresh review gate: no fabricated namespace, no duplicated `/eli` path segment, optional fields remain nullable, graph identity origin correct, relation non-inference preserved.
 - [ ] **Controller checkpoint: do not commit until explicit approval.**
 
 ### Task 9: Sitemap Enumeration with Exact `lastmod`
