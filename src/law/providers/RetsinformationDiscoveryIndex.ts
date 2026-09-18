@@ -34,6 +34,123 @@ export interface RetsinformationIndexEntry {
 
 export class RetsinformationIndexValidationError extends Error {}
 
+const ELI_NAMESPACE = "http://data.europa.eu/eli/ontology#";
+const legalResourceType = `${ELI_NAMESPACE}LegalResource`;
+const legalExpressionType = `${ELI_NAMESPACE}LegalExpression`;
+
+function jsonLdNodes(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  return value === null || value === undefined ? [] : [value];
+}
+
+function isJsonLdRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value);
+}
+
+function hasJsonLdType(node: unknown, typeUri: string): boolean {
+  if (!isJsonLdRecord(node)) return false;
+  return jsonLdNodes(node["@type"]).some((type) => {
+    if (typeof type === "string") return type === typeUri;
+    return isJsonLdRecord(type) && type["@id"] === typeUri;
+  });
+}
+
+function jsonLdStrings(node: unknown, property: string): string[] {
+  if (!isJsonLdRecord(node)) return [];
+  return jsonLdNodes(node[property]).flatMap((value) => {
+    if (typeof value === "string") return [value];
+    if (isJsonLdRecord(value) && typeof value["@value"] === "string") return [value["@value"]];
+    return [];
+  });
+}
+
+function jsonLdIds(node: unknown, property: string): string[] {
+  if (!isJsonLdRecord(node)) return [];
+  return jsonLdNodes(node[property]).flatMap((value) => {
+    if (typeof value === "string") return [value];
+    if (isJsonLdRecord(value) && typeof value["@id"] === "string") return [value["@id"]];
+    return [];
+  });
+}
+
+function trimmedFirstJsonLdString(node: unknown, property: string): string | null {
+  const value = jsonLdStrings(node, property)[0]?.trim();
+  return value || null;
+}
+
+function jsonLdNodesFromGraph(json: unknown): unknown[] | null {
+  if (Array.isArray(json)) return json as unknown[];
+  if (!isRecord(json) || !Array.isArray(json["@graph"])) return null;
+  return json["@graph"] as unknown[];
+}
+
+export function parseRetsinformationJsonLd(
+  json: unknown,
+  canonicalEli: string,
+  observedAt: string,
+): Omit<RetsinformationIndexEntry, "sitemapLastModified"> | null {
+  const parsedCanonical = parseDkCanonicalEli(canonicalEli);
+  if (!parsedCanonical) return null;
+
+  const graph = jsonLdNodesFromGraph(json);
+  if (!graph) return null;
+
+  const expectedResourceId = `https://retsinformation.dk${parsedCanonical.canonicalEli}`;
+  const resource = graph.find(
+    (node) =>
+      isJsonLdRecord(node) &&
+      node["@id"] === expectedResourceId &&
+      hasJsonLdType(node, legalResourceType),
+  );
+  if (!resource) return null;
+
+  const expression = graph.find(
+    (node) => {
+      if (!isJsonLdRecord(node) || !hasJsonLdType(node, legalExpressionType)) return false;
+      const references = new Set([
+        ...jsonLdStrings(node, `${ELI_NAMESPACE}realizes`),
+        ...jsonLdIds(node, `${ELI_NAMESPACE}realizes`),
+      ]);
+      return references.has(expectedResourceId);
+    },
+  );
+  if (!expression) return null;
+
+  const documentTitle = trimmedFirstJsonLdString(expression, `${ELI_NAMESPACE}title`);
+  const documentTypeId = jsonLdIds(resource, `${ELI_NAMESPACE}type_document`)[0];
+  if (!documentTitle || !documentTypeId) return null;
+
+  const documentType = documentTypeId.match(/([^/#?]+)$/u)?.[1];
+  if (!documentType) return null;
+
+  const sourceNumbers = jsonLdStrings(resource, `${ELI_NAMESPACE}number`);
+  if (sourceNumbers.some((sourceNumber) => sourceNumber !== parsedCanonical.number)) return null;
+
+  const statusValues = [
+    ...jsonLdStrings(resource, `${ELI_NAMESPACE}in_force`),
+    ...jsonLdIds(resource, `${ELI_NAMESPACE}in_force`),
+  ];
+  const status = statusValues.length === 1 ? statusValues[0] : null;
+
+  return {
+    canonicalEli: parsedCanonical.canonicalEli,
+    popularTitle: trimmedFirstJsonLdString(expression, `${ELI_NAMESPACE}title_alternative`),
+    documentTitle,
+    documentType,
+    pubMedia: parsedCanonical.pubMedia,
+    year: parsedCanonical.year,
+    number: parsedCanonical.number,
+    status,
+    startDate: null,
+    endDate: null,
+    changeDate: null,
+    accessionNumber: trimmedFirstJsonLdString(resource, `${ELI_NAMESPACE}id_local`),
+    ministry: trimmedFirstJsonLdString(resource, `${ELI_NAMESPACE}responsibility_of`),
+    announcedIn: null,
+    sourceUpdateTimestamp: observedAt,
+  };
+}
+
 const entryFields = [
   "canonicalEli",
   "popularTitle",
