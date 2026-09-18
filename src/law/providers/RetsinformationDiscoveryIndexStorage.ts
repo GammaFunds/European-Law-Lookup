@@ -3,6 +3,8 @@ import {
   type RetsinformationIndex,
   type RetsinformationIndexEntry,
 } from "./RetsinformationDiscoveryIndex";
+import { parseDkCanonicalEli } from "./retsinformationIdentity";
+import type { RetsinformationSitemapEntry } from "./RetsinformationSitemap";
 
 export type RetsinformationIndexSlot = "a" | "b";
 
@@ -21,6 +23,134 @@ export interface RetsinformationIndexTextAdapter {
 export interface RetsinformationDiscoveryIndexMetadataPersistence {
   read(): RetsinformationDiscoveryIndexMetadata;
   save(metadata: RetsinformationDiscoveryIndexMetadata): Promise<void>;
+}
+
+export interface RetsinformationBootstrapCheckpoint {
+  schemaVersion: 1;
+  startedAt: string;
+  sitemapEntries: RetsinformationSitemapEntry[];
+  nextEntryIndex: number;
+  validatedEntries: RetsinformationIndexEntry[];
+}
+
+const CHECKPOINT_FILENAME = "dk-discovery-bootstrap.json";
+
+const checkpointFields: readonly string[] = [
+  "schemaVersion",
+  "startedAt",
+  "sitemapEntries",
+  "nextEntryIndex",
+  "validatedEntries",
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireExactCheckpointFields(raw: Record<string, unknown>): void {
+  const actual = Object.keys(raw).sort();
+  const expected = [...checkpointFields].sort();
+  if (actual.length !== expected.length || actual.some((field, index) => field !== expected[index])) {
+    throw new Error("Retsinformation bootstrap checkpoint has an invalid field shape.");
+  }
+}
+
+class RetsinformationBootstrapCheckpointError extends Error {}
+
+function parseStoredBootstrapCheckpoint(raw: unknown): RetsinformationBootstrapCheckpoint {
+  if (!isRecord(raw)) {
+    throw new RetsinformationBootstrapCheckpointError("Retsinformation bootstrap checkpoint must be an object.");
+  }
+  requireExactCheckpointFields(raw);
+
+  if (raw.schemaVersion !== 1) {
+    throw new RetsinformationBootstrapCheckpointError("Unsupported Retsinformation bootstrap checkpoint schema version.");
+  }
+
+  if (typeof raw.startedAt !== "string") {
+    throw new RetsinformationBootstrapCheckpointError("startedAt must be a string.");
+  }
+
+  if (!Array.isArray(raw.sitemapEntries)) {
+    throw new RetsinformationBootstrapCheckpointError("sitemapEntries must be an array.");
+  }
+
+  const seenEli = new Set<string>();
+  const sitemapEntries: RetsinformationSitemapEntry[] = raw.sitemapEntries.map((rawEntry, index) => {
+    if (!isRecord(rawEntry)) {
+      throw new RetsinformationBootstrapCheckpointError(`sitemapEntries[${index}] must be an object.`);
+    }
+    if (Object.keys(rawEntry).length !== 2 || !("canonicalEli" in rawEntry) || !("sitemapLastModified" in rawEntry)) {
+      throw new RetsinformationBootstrapCheckpointError(`sitemapEntries[${index}] has an invalid field shape.`);
+    }
+    if (typeof rawEntry.canonicalEli !== "string") {
+      throw new RetsinformationBootstrapCheckpointError(`sitemapEntries[${index}] canonicalEli must be a string.`);
+    }
+    const parsed = parseDkCanonicalEli(rawEntry.canonicalEli);
+    if (!parsed || parsed.canonicalEli !== rawEntry.canonicalEli) {
+      throw new RetsinformationBootstrapCheckpointError(`sitemapEntries[${index}] canonicalEli is not canonical.`);
+    }
+    if (seenEli.has(rawEntry.canonicalEli)) {
+      throw new RetsinformationBootstrapCheckpointError(`Duplicate canonicalEli in sitemapEntries: "${rawEntry.canonicalEli}".`);
+    }
+    seenEli.add(rawEntry.canonicalEli);
+
+    const sitemapLastModified = rawEntry.sitemapLastModified;
+    if (sitemapLastModified !== null && typeof sitemapLastModified !== "string") {
+      throw new RetsinformationBootstrapCheckpointError(`sitemapEntries[${index}] sitemapLastModified must be a string or null.`);
+    }
+
+    return { canonicalEli: rawEntry.canonicalEli, sitemapLastModified };
+  });
+
+  if (typeof raw.nextEntryIndex !== "number" || !Number.isInteger(raw.nextEntryIndex) || raw.nextEntryIndex < 0) {
+    throw new RetsinformationBootstrapCheckpointError("nextEntryIndex must be a non-negative integer.");
+  }
+  if (raw.nextEntryIndex > sitemapEntries.length) {
+    throw new RetsinformationBootstrapCheckpointError("nextEntryIndex must not exceed sitemapEntries length.");
+  }
+
+  if (!Array.isArray(raw.validatedEntries)) {
+    throw new RetsinformationBootstrapCheckpointError("validatedEntries must be an array.");
+  }
+
+  if (raw.validatedEntries.length !== raw.nextEntryIndex) {
+    throw new RetsinformationBootstrapCheckpointError("validatedEntries length must equal nextEntryIndex.");
+  }
+
+  const validatedEntries: RetsinformationIndexEntry[] = raw.validatedEntries.map((rawEntry, index) => {
+    if (!isRecord(rawEntry)) {
+      throw new RetsinformationBootstrapCheckpointError(`validatedEntries[${index}] must be an object.`);
+    }
+
+    const parsed = parseStoredRetsinformationIndex({
+      schemaVersion: 1,
+      source: "retsinformation-eli",
+      generatedAt: "placeholder",
+      lastSuccessfulRefresh: null,
+      lastSuccessfulIncrementalRefresh: null,
+      lastSuccessfulFullReconciliation: null,
+      feedWatermark: null,
+      entries: [rawEntry],
+    });
+    return parsed.entries[0];
+  });
+
+  for (let i = 0; i < validatedEntries.length; i++) {
+    if (validatedEntries[i].canonicalEli !== sitemapEntries[i].canonicalEli) {
+      throw new RetsinformationBootstrapCheckpointError(
+        `validatedEntries[${i}] canonicalEli does not match sitemapEntries[${i}] canonicalEli.`,
+      );
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    startedAt: raw.startedAt,
+    sitemapEntries,
+    nextEntryIndex: raw.nextEntryIndex,
+    validatedEntries,
+  };
 }
 
 const indexEntryFields: readonly (keyof RetsinformationIndexEntry)[] = [
@@ -128,6 +258,36 @@ export class RetsinformationDiscoveryIndexStorage {
       await this.metadata.save({ activeSlot: current.activeSlot, candidateSlot: null });
       await this.adapter.remove(this.pathForSlot(candidateSlot));
     });
+  }
+
+  async loadBootstrapCheckpoint(): Promise<RetsinformationBootstrapCheckpoint | null> {
+    await this.mutationTail;
+    const path = this.checkpointPath();
+    if (!await this.adapter.exists(path)) {
+      return null;
+    }
+    const raw = JSON.parse(await this.adapter.read(path)) as unknown;
+    return parseStoredBootstrapCheckpoint(raw);
+  }
+
+  saveBootstrapCheckpoint(checkpoint: RetsinformationBootstrapCheckpoint): Promise<void> {
+    return this.enqueueMutation(async () => {
+      parseStoredBootstrapCheckpoint(checkpoint);
+      await this.adapter.write(this.checkpointPath(), JSON.stringify(checkpoint));
+    });
+  }
+
+  clearBootstrapCheckpoint(): Promise<void> {
+    return this.enqueueMutation(async () => {
+      const path = this.checkpointPath();
+      if (await this.adapter.exists(path)) {
+        await this.adapter.remove(path);
+      }
+    });
+  }
+
+  private checkpointPath(): string {
+    return `${this.baseDir}/${CHECKPOINT_FILENAME}`;
   }
 
   private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
