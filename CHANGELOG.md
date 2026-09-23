@@ -1,6 +1,18 @@
 # Changelog
 
-All notable changes to Law Lookup for Germany + Austria + Switzerland are documented in this file.
+All notable changes to European Law Lookup are documented in this file.
+
+## [0.6.0] - 2026-09-23
+
+### Added
+
+- Finland support through Finlex.
+- Italy support through Normattiva.
+- Netherlands support through BWB.
+
+### Removed
+
+- Denmark integration from runtime support.
 
 ## [0.3.0] - 2026-09-02
 
