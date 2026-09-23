@@ -3,7 +3,6 @@ import { CELLAR_SPARQL_ENDPOINT } from "./providers/CellarMetadataClient";
 export interface LawProviderHttpResponse {
   ok: boolean;
   status?: number;
-  headers?: Record<string, string>;
   text(): Promise<string>;
   json(): Promise<unknown>;
 }
@@ -25,7 +24,6 @@ interface RequestUrlResponseLike {
   status: number;
   text: string;
   json: unknown;
-  headers?: Record<string, string>;
 }
 
 export type RequestUrlLike = (
@@ -54,7 +52,6 @@ export function createObsidianRequestUrlTransport(
     return {
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
-      headers: response.headers,
       text: async () => response.text,
       json: async () => response.json,
     };

@@ -176,6 +176,16 @@ describe("settings tab rendering", () => {
     assert.equal(settingsTab.plugin.savedData?.enableLawSectionCache, false);
     assert.equal(settingsTab.refreshDomStateCalls, 1);
   });
+
+  it("normalizes invalid jurisdiction values to EU", async () => {
+    const settingsTab = await loadSettingsTabFromBundle() as {
+      setControlValue: (key: string, value: unknown) => Promise<void>;
+      getControlValue: (key: string) => unknown;
+    };
+
+    await settingsTab.setControlValue("defaultJurisdiction", "INVALID");
+    assert.equal(settingsTab.getControlValue("defaultJurisdiction"), "EU");
+  });
 });
 
 describe("lawSectionCacheKey", () => {

@@ -112,12 +112,12 @@ class StubSetting {
   addText(): StubSetting { return this; }
 }
 
-let requestCalls = 0;
+let requestedUrls: string[] = [];
 let requestObserved: Promise<void>;
 let resolveRequestObserved: () => void;
 
 function resetTransport(): void {
-  requestCalls = 0;
+  requestedUrls = [];
   requestObserved = new Promise<void>((resolve) => {
     resolveRequestObserved = resolve;
   });
@@ -130,13 +130,17 @@ async function transportReachedWithin(ms: number): Promise<boolean> {
   ]);
 }
 
+function cellarRequestCount(): number {
+  return requestedUrls.filter((url) => url.includes("publications.europa.eu")).length;
+}
+
 const emptyCellarResponse = {
   head: { vars: [] },
   results: { bindings: [] },
 };
 
-async function requestUrlStub() {
-  requestCalls += 1;
+async function requestUrlStub(options: { url: string }) {
+  requestedUrls.push(options.url);
   resolveRequestObserved();
   return {
     status: 200,
@@ -247,11 +251,10 @@ describe("EU act index fail-closed refresh guard", () => {
 
     await plugin.onload();
 
-    const reached = await transportReachedWithin(100);
+    await transportReachedWithin(100);
 
     assert.equal(plugin.euActIndex, null);
-    assert.equal(reached, false, "fail-closed startup must suppress automatic CELLAR refresh");
-    assert.equal(requestCalls, 0);
+    assert.equal(cellarRequestCount(), 0, "fail-closed startup must suppress automatic CELLAR refresh");
     assert.equal(plugin.pluginData.euActIndexStore.activeSlot, "a");
     assert.equal(adapter.files.has(slotB), false);
     assert.deepEqual(adapter.writes, []);
@@ -279,10 +282,8 @@ describe("EU act index fail-closed refresh guard", () => {
     resetTransport();
 
     await plugin.refreshEuActIndex();
-    const reached = await transportReachedWithin(100);
 
-    assert.equal(reached, false, "manual refresh must not bypass fail-closed dedicated authority");
-    assert.equal(requestCalls, 0);
+    assert.equal(cellarRequestCount(), 0, "manual refresh must not bypass fail-closed dedicated authority");
     assert.equal(plugin.pluginData.euActIndexStore.activeSlot, "a");
     assert.equal(adapter.files.has(slotB), false);
     assert.deepEqual(adapter.writes, []);

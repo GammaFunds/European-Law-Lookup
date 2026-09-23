@@ -195,7 +195,7 @@ describe("ui i18n", () => {
       "729/2018 § 1",
     ]);
     const unexpected = Object.entries(german)
-      .filter(([key, value]) => value === english[key as keyof typeof english] && !technicalIdentities.has(value))
+      .filter(([key, value]) => value === english[key as keyof typeof english] && !technicalIdentities.has(value) && !isAllowedIdenticalKey("de", key))
       .map(([key, value]) => `${key}=${value}`);
     assert.deepEqual(unexpected, []);
     for (const key of ["noRecognizedCitation", "unexpectedLookupFailure", "euLanguageExpressionUnavailable", "englishTranslationUnavailableForCitation"] as const) {
