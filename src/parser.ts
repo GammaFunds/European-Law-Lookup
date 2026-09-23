@@ -8,7 +8,6 @@ import {
 } from "./law/euActRegistry";
 import { resolveEuHumanCitation } from "./law/euHumanCitation";
 import { parseNormattivaLawCode } from "./law/providers/NormattivaLawProvider";
-import { parseDkCanonicalEli } from "./law/providers/retsinformationIdentity";
 
 export type ParsedLawReference = LawReference;
 
@@ -212,7 +211,6 @@ export function parseLawReferenceWithSelectedJurisdiction(
   if (selectedJurisdiction === "IT") {
     return parseNormattivaLawReference(input);
   }
-  if (selectedJurisdiction === "DK") return parseDkLawReference(input);
   if (selectedJurisdiction === "EU") {
     const normalized = input.trim().replace(/\s+/g, " ");
     const euCelexArticle = parseEuCelexArticle(normalized);
@@ -300,24 +298,6 @@ export function parseLawReferenceWithSelectedJurisdiction(
   }
 
   return null;
-}
-
-function parseDkLawReference(input: string): ParsedLawReference | null {
-  const normalized = input.trim().replace(/\s+/gu, " ");
-  const match = /^(.*?)\s+§\s*(\d+(?:\s+[a-z])?)(?:,\s*stk\.\s*(\d+))?$/iu.exec(normalized);
-  if (!match) return null;
-
-  const identity = parseDkCanonicalEli(match[1]);
-  if (!identity) return null;
-
-  const reference: ParsedLawReference = {
-    lawCode: identity.canonicalEli,
-    section: match[2].toLowerCase(),
-    referenceType: "section",
-    jurisdiction: "DK",
-  };
-  if (match[3]) reference.subsection = `stk. ${match[3]}`;
-  return reference;
 }
 
 function parseBwbLawReference(input: string): ParsedLawReference | null {

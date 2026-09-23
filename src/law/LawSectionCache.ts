@@ -34,14 +34,6 @@ export function lawSectionCacheKey(reference: LawReference): string | null {
     if (languageToken === null) return null;
     return `EU:${celex}:${euSectionKey(reference)}:${languageToken}`;
   }
-  if (reference.jurisdiction === "DK") {
-    const lawCode = reference.lawCode.trim().toLowerCase();
-    const section = reference.section.trim().toLowerCase();
-    const subsection = reference.subsection?.trim().toLowerCase();
-    return subsection
-      ? `DK:${lawCode}:${section}:${subsection}`
-      : `DK:${lawCode}:${section}`;
-  }
   const jurisdiction = reference.jurisdiction === "AT"
     ? "AT:"
     : reference.jurisdiction === "CH"
@@ -93,7 +85,7 @@ function cacheKeysForRead(reference: LawReference): string[] {
   if (reference.jurisdiction === "EU") {
     return [key];
   }
-  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH" || reference.jurisdiction === "ES" || reference.jurisdiction === "FI" || reference.jurisdiction === "DK") {
+  if (reference.jurisdiction === "AT" || reference.jurisdiction === "CH" || reference.jurisdiction === "ES" || reference.jurisdiction === "FI") {
     return [key];
   }
 
