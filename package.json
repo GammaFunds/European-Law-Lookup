@@ -23,6 +23,6 @@
     "eslint": "9.31.0",
     "eslint-plugin-obsidianmd": "0.4.2",
     "obsidian": "^1.13.0",
-    "typescript": "^5.7.3"
+    "typescript": "^7.0.2"
   }
 }
