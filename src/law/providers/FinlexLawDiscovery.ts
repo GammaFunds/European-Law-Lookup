@@ -36,7 +36,7 @@ export class FinlexLawDiscovery implements LawDiscoveryProvider {
       try { xml = await response.text(); } catch { throw new LawDiscoveryMalformedResponseError("Finlex metadata XML was unreadable"); }
       let document;
       try { document = parseFinlexAkn(xml, match[1], match[2], "fin"); } catch { throw new LawDiscoveryMalformedResponseError("Finlex metadata identity was malformed"); }
-      entries.push({ jurisdiction: "FI", canonicalInput: `${document.number}/${document.year}`, title: document.title, sourceUrl, year: document.year, number: document.number } as LawMetadataSearchEntry);
+      entries.push({ jurisdiction: "FI", canonicalInput: `${document.number}/${document.year}`, title: document.title, sourceUrl, year: document.year, number: document.number });
     }
     return entries.length === 0 ? { kind: "no-results", entries: [] } : { kind: "results", entries };
   }
@@ -52,7 +52,7 @@ export class FinlexLawDiscovery implements LawDiscoveryProvider {
     try { document = parseFinlexAkn(xml, year, number, "fin"); } catch { throw new LawDiscoveryMalformedResponseError("Finlex metadata identity was malformed"); }
     return {
       kind: "results",
-      entries: [{ jurisdiction: "FI", canonicalInput: `${document.number}/${document.year}`, title: document.title, sourceUrl, year: document.year, number: document.number } as LawMetadataSearchEntry],
+      entries: [{ jurisdiction: "FI", canonicalInput: `${document.number}/${document.year}`, title: document.title, sourceUrl, year: document.year, number: document.number }],
     };
   }
 
