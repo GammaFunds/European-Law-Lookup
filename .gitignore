@@ -1,4 +1,7 @@
 node_modules/
+
+# Generated Obsidian plugin bundle; publish via GitHub Releases.
+main.js
 dist/
 test-dist/
 .obsidian/
