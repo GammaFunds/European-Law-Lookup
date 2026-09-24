@@ -24,6 +24,96 @@ All notable changes to European Law Lookup are documented in this file.
 
 - Denmark integration from runtime support.
 
+## [0.5.4] - 2026-09-11
+
+### Fixed
+
+- Resolved Obsidian review warnings in the production code and strengthened the corresponding lint rules.
+- Added support for full EU citations in law-title autocomplete while preserving jurisdiction-scoped lookup behavior.
+
+## [0.5.3] - 2026-09-11
+
+### Fixed
+
+- Restored Spain / BOE law lookup across discovery, provider integration, metadata search, and the lookup modal.
+
+## [0.5.2] - 2026-09-09
+
+### Fixed
+
+- Replaced `String.prototype.matchAll()` in Spain / BOE permalink parsing with an ES2018-compatible `RegExp.exec()` loop.
+
+### Scope and safety
+
+- No lookup semantics, BOE identity validation, dependencies, or minimum Obsidian version changed.
+
+## [0.5.1] - 2026-09-09
+
+### Added
+
+- Added Spain / BOE law lookup.
+
+### Fixed
+
+- Removed a `:has()` selector from settings styles for broader Obsidian compatibility.
+
+## [0.5.0] - 2026-09-07
+
+### Added
+
+- Added jurisdiction-scoped law-title autocomplete.
+- Added autocomplete support backed by the production EU act index.
+- Added selected-law confirmation before reference entry.
+
+### Documentation
+
+- Updated the public documentation for the 0.5.0 lookup workflow and supported features.
+
+## [0.4.3] - 2026-09-06
+
+### Changed
+
+- Raised the minimum supported Obsidian version to 1.13.0.
+- Updated `eslint-plugin-obsidianmd` to 0.4.2.
+- Completed the declarative settings path and removed the legacy settings-refresh implementation.
+
+### Fixed
+
+- Tightened EU language type handling and settings rendering around the declarative Obsidian settings API.
+
+## [0.4.2] - 2026-09-05
+
+### Changed
+
+- Updated the Obsidian development API dependency to 1.13.0 while retaining the then-declared 1.8.0 minimum runtime version.
+- Updated the public plugin description and README wording.
+
+### Improved
+
+- Expanded the declarative settings surface and its regression coverage.
+
+## [0.4.1] - 2026-09-05
+
+### Fixed
+
+- Addressed additional Obsidian and TypeScript lint findings, including timer usage and redundant type assertions.
+- Tightened EU notice parsing so ordinary opening tags remain accepted while self-closing URI-like tags are rejected.
+
+### Quality
+
+- Added stricter lint checks for unnecessary assertions, redundant type constituents, useless escapes, and Obsidian timer usage.
+
+## [0.4.0] - 2026-09-05
+
+### Changed
+
+- Adopted the public product name **European Law Lookup** while retaining the existing plugin identifier for compatibility.
+
+### Improved
+
+- Improved multilingual EU and Swiss law lookup.
+- Strengthened EU act-index persistence and refresh handling, citation parsing, language handling, cache behavior, and lookup UI coverage.
+
 ## [0.3.0] - 2026-09-02
 
 ### Added
