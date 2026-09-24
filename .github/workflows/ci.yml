@@ -38,7 +38,9 @@ jobs:
         run: npm run lint
 
       - name: Build bundle
-        run: npm run build
+        run: |
+          npm run build
+          test -s main.js
 
       - name: Check diff whitespace
         run: git diff --check
@@ -52,10 +54,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Verify committed generated artifacts
+      - name: Verify committed release metadata
         run: |
           set -euo pipefail
-          cmp <(git show HEAD:main.js) main.js
           cmp <(git show HEAD:manifest.json) manifest.json
           cmp <(git show HEAD:styles.css) styles.css
           git diff --quiet
