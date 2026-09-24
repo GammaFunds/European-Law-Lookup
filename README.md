@@ -1,5 +1,7 @@
 # European Law Lookup
 
+[![OpenSSF Best Practices](https://bestpractices.dev/projects/14808/badge)](https://bestpractices.dev/projects/14808)
+
 **European Law Lookup** brings legal text from the European Union, Germany, Austria, Switzerland, Spain, Finland, Italy, and the Netherlands into Obsidian.
 
 Look up supported EU regulations, directives, and decisions by human-readable citation or CELEX identifier, choose from the 24 official EU languages, preview the retrieved legal text and source information, and insert the formatted result into your active note only when you explicitly confirm the insertion.
