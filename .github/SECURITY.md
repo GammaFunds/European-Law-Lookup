@@ -6,6 +6,8 @@ Security fixes are provided for the latest published release of European Law Loo
 
 ## Reporting a Vulnerability
 
+Security contact: the repository maintainer, [@GammaFunds](https://github.com/GammaFunds), via the private reporting channel below.
+
 Please report suspected vulnerabilities privately through GitHub's security advisory reporting for this repository:
 
 https://github.com/GammaFunds/European-Law-Lookup/security/advisories/new
