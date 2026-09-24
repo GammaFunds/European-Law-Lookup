@@ -104,13 +104,13 @@ jobs:
 
       # actions/attest v4
       - name: Attest main.js
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: main.js
 
       # actions/attest v4
       - name: Attest styles.css
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: styles.css
 
