@@ -236,6 +236,14 @@ Keeping the existing ID preserves continuity for current installations and updat
 
 The GitHub repository is now named `european-law-lookup`; the Obsidian plugin ID remains `german-law-lookup` for compatibility with existing installations.
 
+## Feedback, bugs, and contributions
+
+Use the [GitHub issue tracker](https://github.com/GammaFunds/European-Law-Lookup/issues) for reproducible bugs, feature requests, and other non-security feedback.
+
+For security vulnerabilities, do **not** post technical details in a public issue. Follow the private reporting process in [SECURITY.md](.github/SECURITY.md).
+
+Contributions are welcome through pull requests. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the development setup, validation commands, contribution process, and scope requirements.
+
 ## Development
 
 Install the locked dependencies:
