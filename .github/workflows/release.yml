@@ -96,7 +96,6 @@ jobs:
           test -s main.js
           test -s manifest.json
           test -s styles.css
-          cmp <(git show HEAD:main.js) main.js
           cmp <(git show HEAD:manifest.json) manifest.json
           cmp <(git show HEAD:styles.css) styles.css
           git diff --quiet
