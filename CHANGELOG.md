@@ -2,6 +2,16 @@
 
 All notable changes to European Law Lookup are documented in this file.
 
+## [0.6.1] - 2026-09-24
+
+### Fixed
+
+- Explicitly declared TypeScript libraries for modern APIs already used by the providers and removed redundant Finlex metadata type assertions.
+
+### Scope and safety
+
+- No runtime or provider behavior changed.
+
 ## [0.6.0] - 2026-09-23
 
 ### Added
