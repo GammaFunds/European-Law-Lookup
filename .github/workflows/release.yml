@@ -83,12 +83,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
-
       - name: Build release bundle
         run: |
           set -euo pipefail
@@ -101,6 +95,12 @@ jobs:
           git diff --quiet
           git diff --cached --quiet
           test -z "$(git ls-files --others --exclude-standard)"
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
 
       # actions/attest v4
       - name: Attest main.js
