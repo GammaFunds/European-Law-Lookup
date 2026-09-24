@@ -1,6 +1,6 @@
 # European Law Lookup
 
-**European Law Lookup** brings legal text from the European Union, Germany, Austria, Switzerland, and Spain into Obsidian.
+**European Law Lookup** brings legal text from the European Union, Germany, Austria, Switzerland, Spain, Finland, Italy, and the Netherlands into Obsidian.
 
 Look up supported EU regulations, directives, and decisions by human-readable citation or CELEX identifier, choose from the 24 official EU languages, preview the retrieved legal text and source information, and insert the formatted result into your active note only when you explicitly confirm the insertion.
 
@@ -14,8 +14,8 @@ Look up supported EU regulations, directives, and decisions by human-readable ci
 - **Human-readable EU citations** such as `Art. 1 Directive 2011/61/EU` and `Art. 1 Regulation (EU) 2024/3110`.
 - **Direct CELEX lookup** such as `32016R0679 Art. 1`.
 - **24 official EU languages** for official EU legal text when the requested language expression is available.
-- **Germany, Austria, Switzerland, and Spain** remain available as additional jurisdictions.
-- **Official-source retrieval** from EUR-Lex / Publications Office CELLAR, Gesetze im Internet, RIS, and Fedlex.
+- **Germany, Austria, Switzerland, Spain, Finland, Italy, and the Netherlands** are available as additional jurisdictions.
+- **Official-source retrieval** from EUR-Lex / Publications Office CELLAR, Gesetze im Internet, RIS, Fedlex, Spain's BOE, Finland's Finlex, Italy's Normattiva, and the Netherlands' BWB / Wetten.nl.
 - **Preview before insertion** so a lookup never modifies a note without an explicit user action.
 - **Source-aware metadata** for citations, retrieval dates, jurisdiction, language, cache state, and source status where available.
 - **Configurable lookup workflow** with a one-line or two-field input layout, a default jurisdiction, and jurisdiction-specific language preferences where supported.
@@ -134,6 +134,30 @@ The settings UI also presents the official full titles of the mapped Swiss laws 
 
 Swiss section-style references, cantonal law, and unlisted federal laws remain outside the current scope.
 
+## Spain
+
+Spanish discovery uses the official **BOE (Boletín Oficial del Estado)** consolidated-legislation service. Search by title or official law number, for example `Ley 40/2015` or `40/2015`; a result is identified by a BOE ID such as `BOE-A-2015-10566`.
+
+Article lookup is supported in Spanish, for example Article 1 of a selected BOE act. The provider retrieves consolidated article text and does not mark it as authoritative text; verify legal status against the official publication.
+
+## Finland
+
+**Finlex** supports consolidated statutes identified by number and year, such as `729/2018`, with numbered section lookup such as `§ 1`. Discovery accepts a statute identity directly or searches by title.
+
+Finnish and Swedish text are supported. The provider retrieves Finlex consolidated text and does not mark it as authoritative text.
+
+## Italy
+
+**Normattiva** discovery searches act titles, for example `Codice civile`, and provides the act identity needed for lookup. Article lookup supports positive-numbered articles, including Article 1 of the discovered Codice civile act.
+
+Retrieved text is in Italian. Lookup is limited to articles for acts returned with the metadata required by discovery; the provider does not mark retrieved text as authoritative text.
+
+## Netherlands
+
+**BWB / Wetten.nl** discovery searches by title or BWB identifier, for example `Algemene wet bestuursrecht` or `BWBR0005537`. Article lookup supports numbered forms such as Article 1:1 and retrieves Dutch text.
+
+Lookup resolves the BWB state whose validity and visibility periods include the current date. The provider does not mark retrieved text as authoritative text.
+
 ## How it works
 
 1. Open the command palette.
@@ -154,6 +178,10 @@ European Law Lookup retrieves legal information from public official or governme
 - **Germany:** Gesetze im Internet.
 - **Austria:** RIS, Bundesrecht konsolidiert.
 - **Switzerland:** Fedlex.
+- **Spain:** BOE (Boletín Oficial del Estado) consolidated legislation.
+- **Finland:** Finlex.
+- **Italy:** Normattiva.
+- **Netherlands:** BWB / Wetten.nl.
 
 The plugin is a research and productivity tool, not legal advice.
 
@@ -206,7 +234,7 @@ german-law-lookup
 
 Keeping the existing ID preserves continuity for current installations and updates.
 
-The GitHub repository is intended to move from `german-law-lookup` to `european-law-lookup` after the 0.4.0 release is published and verified.
+The GitHub repository is now named `european-law-lookup`; the Obsidian plugin ID remains `german-law-lookup` for compatibility with existing installations.
 
 ## Development
 
